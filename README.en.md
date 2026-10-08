@@ -29,12 +29,12 @@ A real result (8-direction walk sheets):
 | Loops · one-shots | Walks and dances are cut into seamless loops; attacks are trimmed to the action. Motions that end in a different pose (like death) are supported. |
 | Directions · camera | 8, 4 or 2 directions, from eye level to top-down (default: 45° high quarter view). |
 | HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. |
-| Light effects | None · vivid · strip. Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
+| Light effects | None · vivid · strip (under "Advanced"). Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
 | Magenta from start to end | Every mode, including the 3D mannequin, generates on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated with a new seed (up to twice by default) and the cleanest result is kept. |
 | AI matting (optional) | BEN v2 (MIT) fixes only what chroma keying gets wrong: holes in colors close to the background, floor shadows and colored fringes. Used automatically after `setup_matting.bat` downloads the model (about 380 MB). |
 | Automatic checks | Flags holes, magenta/green fringes, loop seams, cut-offs at the frame edge, per-direction size differences, empty frames and mid-clip background color changes, and marks the frames. |
 | Post-processing | Change playback speed, swap a bad frame for another moment of the video, or remake one direction (and undo it if you liked the old one better), without regenerating everything. |
-| Game engine export | One ZIP with the sheet PNG/JSON/GIF plus **Aseprite JSON** (Phaser, PixiJS), **Godot 4** SpriteFrames + scene, and per-direction **frame PNGs** (Unity etc.). "Download all" also merges every motion into a single Godot SpriteFrames. |
+| Game engine export | One ZIP with the sheet PNG/JSON/GIF plus **Aseprite JSON** (Phaser, PixiJS), **Godot 4** SpriteFrames + scene, and per-direction **frame PNGs** (Unity etc.). "Download ▾ → Every motion of this character" also merges every motion into a single Godot SpriteFrames. |
 | Game info | The sheet JSON includes the attack impact frame (`hit_frame`), whether to stop on the last frame (`hold_last`) and, for walks and runs, the movement speed that keeps the feet from sliding (`move_speed`, per-direction `velocity`). |
 
 ## How it works
@@ -92,9 +92,11 @@ fake frames). They also run automatically on Windows and Linux for every push.
 1. Upload a turnaround.
 2. Make the 8-direction drawing (Codex or upload). If a direction faces the wrong way you get a warning; fix just that
    direction with "redraw one direction".
-3. Make motions from text, a reference video or the 3D mannequin, or press "basic motion set" to make them all.
+3. Make motions from text or a reference video and pick loop or one-shot. Frame count, how directions are matched
+   (3D mannequin etc.) and light effects are under "Advanced" (defaults suit the motion). Press "Make the basic
+   motions at once" to make all six basic motions.
 4. Check the automatic-check marks, adjust the speed or swap bad frames.
-5. Download the ZIP. Engine instructions are in `엔진에서_쓰는_법.txt` (Korean and English) inside the ZIP.
+5. Download the ZIP from "Download ▾" at the top right. Engine instructions are in `엔진에서_쓰는_법.txt` (Korean and English) inside the ZIP.
 
 ## Using the sprites in a game engine
 
@@ -105,7 +107,7 @@ fake frames). They also run automatically on Windows and Linux for every push.
 | Godot 4 | `godot/` folder | Copy the folder and instance the `.tscn` (AnimatedSprite2D with the feet at the node origin) |
 | Unity · others | `frames/hd/<direction>/` | Import the PNGs per direction and make animations (pivot values are in the txt) |
 
-"Download all" contains every motion, and `godot_all/` holds a single SpriteFrames with all motions (animation names
+"Every motion of this character" contains every motion, and `godot_all/` holds a single SpriteFrames with all motions (animation names
 like `walk_S`). Frames are padded so the feet stay at the same point in every motion, so switching animations does not
 make the character jump.
 
