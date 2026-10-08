@@ -14,7 +14,7 @@ from . import qa
 from .comfy import FPS
 from .directions import SHEET_ORDER, preview_layout, source_of
 from .effects import remove_effects
-from .imaging import (bbox, cutout_any, estimate_bg, frame_alpha, find_cycle, load_frames, pixelate, save_gif,
+from .imaging import (bbox, bg_pattern, cutout_any, estimate_bg, frame_alpha, find_cycle, load_frames, pixelate, save_gif,
                       thumbnails)
 
 
@@ -126,7 +126,9 @@ def analyze_direction(frames_dir, kind, n_frames, strip_effects=False, window=No
     cx = [float(np.average(np.arange(a.shape[1]), weights=a.sum(axis=0) + 1e-6)) for a in alphas]
     rep["picked"] = picks
     # 첫 프레임과 배경색이 크게 다른 프레임 (영상 AI가 효과 장면에서 배경을 다른 색으로 바꾼 것)
-    rep["bg_changed"] = int(sum(np.linalg.norm(np.asarray(b, np.float32) - np.asarray(bg, np.float32)) > 60 for b in bgs))
+    # 마젠타 위에 동심원·소용돌이 무늬를 그린 프레임도 (가장자리 중앙값은 그대로라 색 비교로는 안 잡힘)
+    rep["bg_changed"] = int(sum(np.linalg.norm(np.asarray(b, np.float32) - np.asarray(bg, np.float32)) > 60
+                                or bg_pattern(f) > 0.1 for b, f in zip(bgs, frames)))
     rep["video_frames"] = len(frames)
     rep["drift_x_px"] = round(max(cx) - min(cx), 1)
     rep["frames_touching_edge"] = sum(int(max(a[0].max(), a[-1].max(), a[:, 0].max(), a[:, -1].max()) > 0.5)

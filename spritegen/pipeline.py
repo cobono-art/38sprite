@@ -18,7 +18,7 @@ from . import project as store
 from .assemble import assemble, retime
 from .directions import detect_cells, directions_for, facing_problems, first_frames, generated_directions
 from .effects import remove_effects
-from .imaging import (KEY_MAGENTA, cutout_any, cutout_rgba, estimate_bg, frame_alpha, frames_to_webp, load_frames,
+from .imaging import (KEY_MAGENTA, cutout_any, cutout_rgba, bg_pattern, estimate_bg, frame_alpha, frames_to_webp, load_frames,
                       load_ref, sheet_alpha)
 from .prompts import follow_prompt, mannequin_prompt, motion_prompt, redraw_prompt, reference_prompt, sheet_prompt
 from . import mannequin as mq
@@ -485,12 +485,14 @@ def render_mannequin_refs(pid, mid, gen, meta, server):
 
 
 def bg_drift(frames_dir, step=2):
-    """영상 AI가 배경을 마젠타가 아닌 색으로 바꾼 프레임 수 → (바뀐 프레임, 전체 프레임). step장마다 하나씩 본다."""
+    """영상 AI가 배경을 마젠타가 아닌 색으로 바꾸거나 마젠타 위에 무늬를 그린 프레임 수 → (그런 프레임, 전체 프레임).
+    step장마다 하나씩 본다."""
     files = sorted(Path(frames_dir).glob("*.png"))
     bad = 0
     for f in files[::step]:
-        r, g, b = estimate_bg(np.asarray(Image.open(f).convert("RGB")))
-        bad += int(min(r, b) - g <= 80)
+        frame = np.asarray(Image.open(f).convert("RGB"))
+        r, g, b = estimate_bg(frame)
+        bad += int(min(r, b) - g <= 80 or bg_pattern(frame) > 0.1)
     return bad * step, len(files)
 
 

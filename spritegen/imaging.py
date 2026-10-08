@@ -19,6 +19,15 @@ def estimate_bg(frame):
     return np.median(border, axis=0)
 
 
+def bg_pattern(frame, band=24):
+    """화면 가장자리 띠에서 마젠타가 아닌 픽셀 비율. 영상 AI가 마젠타 위에 동심원·소용돌이 무늬를 그리면 배경색(가장자리
+    중앙값)은 마젠타 그대로라 색 검사로는 못 잡는다 (2026-10-08 시험: 무늬 있는 영상 0.2~0.66, 깨끗한 영상 0.000)."""
+    a = frame.astype(np.int16)
+    edge = np.concatenate([a[:band].reshape(-1, 3), a[-band:].reshape(-1, 3),
+                           a[band:-band, :band].reshape(-1, 3), a[band:-band, -band:].reshape(-1, 3)])
+    return float((np.minimum(edge[:, 0], edge[:, 2]) - edge[:, 1] < 110).mean())
+
+
 def alpha_mask(frame, bg, lo, hi):
     """배경색과 가까우면서 화면 테두리와 이어진 영역만 배경으로 보고 지운다 (캐릭터 안쪽 회색은 보존)."""
     dist = np.linalg.norm(frame.astype(np.float32) - bg, axis=2)

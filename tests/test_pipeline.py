@@ -97,6 +97,23 @@ class PipelineHelpersTest(unittest.TestCase):
             drift, total = pl.bg_drift(write_frames(td, frames), step=1)
         self.assertEqual((drift, total), (10, 30))
 
+    def test_bg_drift_catches_patterns(self):
+        """마젠타 위에 그린 동심원 무늬도 배경이 바뀐 것으로 본다 (가장자리 중앙값은 마젠타 그대로라도)."""
+        import cv2
+        frames = [walk_frame(t) for t in range(10)]
+        for t in range(10, 16):
+            f = walk_frame(t).copy()
+            h, w = f.shape[:2]
+            for r in range(10, 2 * max(h, w), 18):
+                cv2.circle(f, (w // 2, h // 2), r, (40, 200, 220), 5)
+            frames.append(f)
+        self.assertEqual(pl.bg_pattern(frames[0]), pl.bg_pattern(frames[0]))   # 결정적
+        self.assertLess(pl.bg_pattern(frames[0]), 0.05)
+        self.assertGreater(pl.bg_pattern(frames[12]), 0.1)
+        with TempDir() as td:
+            drift, total = pl.bg_drift(write_frames(td, frames), step=1)
+        self.assertEqual((drift, total), (6, 16))
+
     def test_fit_keys_shortens_waiting_only(self):
         pose_a, pose_b = {"r_elbow": [0, 0, 1]}, {"r_elbow": [1, 0, 0]}
         keys = [dict(pose_a, t=0.0), dict(pose_a, t=1.2), dict(pose_b, t=1.45), dict(pose_a, t=3.0),
