@@ -47,6 +47,11 @@
 
     <section class="group" aria-labelledby="h-view">
       <h2 id="h-view"><span class="num">1</span>보기 설정</h2>
+      <div class="summary-row" id="view-summary">
+        <span id="view-summary-text"></span>
+        <button type="button" class="ghost small" id="btn-view-toggle" aria-expanded="false" aria-controls="view-detail">바꾸기</button>
+      </div>
+      <div class="group-detail" id="view-detail">
       <div class="line"><span>보는 각도</span><span class="value" id="angle-value"></span></div>
       <div class="seg" id="angle-presets"></div>
       <input type="range" id="angle" min="0" max="80" step="5" aria-label="보는 각도(도)">
@@ -70,6 +75,7 @@
           <select id="pixel-height"><option value="48">48px</option><option value="64">64px</option><option value="80">80px</option><option value="96">96px</option><option value="128">128px</option></select>
         </label>
       </div>
+      </div>
       <p class="error small" id="settings-error" hidden></p>
     </section>
 
@@ -82,7 +88,11 @@
         <div class="sheet-side">
           <p class="small" id="sheet-state"></p>
           <button type="button" class="primary" id="btn-sheet">Codex로 그리기</button>
-          <label class="button ghost">직접 올리기<input type="file" id="sheet-file" accept="image/png,image/jpeg,image/webp" hidden></label>
+          <div class="mini-links">
+            <label class="link-btn">직접 올리기<input type="file" id="sheet-file" accept="image/png,image/jpeg,image/webp" hidden></label>
+            <button type="button" class="link-btn" id="btn-redraw-toggle" aria-expanded="false" aria-controls="redraw-row" hidden>한 방향만 다시 그리기</button>
+            <button type="button" class="link-btn" id="btn-history-toggle" aria-expanded="false" aria-controls="sheet-history" hidden>예전 그림</button>
+          </div>
         </div>
       </div>
       <div class="line redraw" id="redraw-row" hidden>
@@ -112,6 +122,10 @@
           <button type="button" data-kind="loop" aria-pressed="true">반복 동작 (걷기·대기)</button>
           <button type="button" data-kind="oneshot" aria-pressed="false">한 번 하는 동작 (공격·피격)</button>
         </div>
+        <button type="button" class="adv-toggle" id="btn-adv" aria-expanded="false" aria-controls="adv-motion">
+          <b id="adv-label">고급 옵션 ▸</b><span class="muted small" id="adv-summary"></span>
+        </button>
+        <div class="adv-box" id="adv-motion" hidden>
         <div class="line">
           <label class="field inline"><span>프레임</span>
             <select id="m-frames"><option>6</option><option selected>8</option><option>10</option><option>12</option><option>16</option><option>24</option></select>
@@ -142,14 +156,15 @@
           </div>
         </div>
         <p class="muted small" id="fx-hint"></p>
+        </div>
         <p class="error" id="motion-error" hidden></p>
         <button type="submit" class="primary big" id="btn-motion">동작 만들기</button>
         <p class="muted small center" id="motion-eta"></p>
       </form>
       <div class="set-box" id="set-box">
-        <div class="set-head"><b>기본 모션 세트</b><span class="muted small">게임에 넣을 동작 묶음을 한 번에 만들어요</span></div>
-        <div class="set-items" id="set-items"></div>
         <button type="button" class="ghost" id="btn-set">세트 만들기</button>
+        <button type="button" class="link-btn" id="btn-set-pick" aria-expanded="false" aria-controls="set-items">동작 고르기</button>
+        <div class="set-items" id="set-items" hidden></div>
         <p class="error small" id="set-error" hidden></p>
       </div>
     </section>
@@ -159,11 +174,12 @@
     <div class="results-bar">
       <div class="tabs" id="motion-tabs" role="tablist" aria-label="동작"></div>
       <div class="exports" id="exports" hidden>
-        <a class="button" id="ex-zip" download title="시트 PNG·JSON·GIF + Aseprite/Phaser JSON, Godot SpriteFrames, 프레임 PNG(Unity 등)">ZIP 받기 (엔진용 포함)</a>
-        <a class="button ghost" id="ex-gif" download>GIF</a>
-        <a class="button ghost" id="ex-png" download>시트 PNG</a>
-        <a class="button ghost" id="ex-json" download>JSON</a>
-        <a class="button ghost" id="ex-all" download title="다 만든 동작 전부 + Godot 하나로 합친 SpriteFrames">전체 받기</a>
+        <button type="button" class="primary" id="btn-export" aria-expanded="false" aria-controls="export-menu">받기 ▾</button>
+        <div class="export-menu" id="export-menu" hidden>
+          <a id="ex-zip" download title="시트 PNG·JSON·GIF + Aseprite/Phaser JSON, Godot SpriteFrames, 프레임 PNG(Unity 등)"><b>ZIP (엔진용 포함)</b><span class="muted small">Godot · Phaser · Unity 파일 모두</span></a>
+          <a id="ex-all" download title="다 만든 동작 전부 + Godot 하나로 합친 SpriteFrames"><b>이 캐릭터 동작 전부</b><span class="muted small">Godot 하나로 합친 것 포함</span></a>
+          <div class="export-small"><a id="ex-gif" download>GIF</a><a id="ex-png" download>시트 PNG</a><a id="ex-json" download>JSON</a></div>
+        </div>
       </div>
     </div>
     <div class="motion-view" id="motion-view" role="tabpanel"></div>
@@ -208,8 +224,6 @@
       <div><div class="sv-title"></div><div class="muted small sv-sub"></div></div>
       <div class="dpad" aria-label="방향 고르기"></div>
       <div class="seg small sv-view"><button type="button" data-view="all" aria-pressed="true">전체</button><button type="button" data-view="one" aria-pressed="false">한 방향</button></div>
-      <div class="seg small sv-res"><button type="button" data-res="hd" aria-pressed="true">HD</button><button type="button" data-res="px" aria-pressed="false">픽셀</button></div>
-      <div class="seg small sv-bg"><button type="button" data-bg="dark" aria-pressed="true">어둡게</button><button type="button" data-bg="light" aria-pressed="false">밝게</button><button type="button" data-bg="checker" aria-pressed="false">체크</button></div>
       <div class="speed">
         <div class="line"><span>재생 속도</span><span class="speed-val sv-speed-val"></span></div>
         <input type="range" class="sv-speed" min="0.5" max="4" step="0.1" value="1" aria-label="재생 속도 (원래 속도의 몇 배)">
@@ -219,9 +233,14 @@
       <button type="button" class="ghost small sv-redo"></button>
       <button type="button" class="ghost small sv-undo" hidden></button>
       <p class="small muted sv-redo-msg" aria-live="polite" hidden></p>
-      <dl class="stats"></dl>
       <div class="sv-qa"></div>
-      <p class="muted small sv-text"></p>
+      <details class="sv-more">
+        <summary>정보 · 보기 설정</summary>
+        <div class="seg small sv-res"><button type="button" data-res="hd" aria-pressed="true">HD</button><button type="button" data-res="px" aria-pressed="false">픽셀</button></div>
+        <div class="seg small sv-bg"><button type="button" data-bg="dark" aria-pressed="true">어둡게</button><button type="button" data-bg="light" aria-pressed="false">밝게</button><button type="button" data-bg="checker" aria-pressed="false">체크</button></div>
+        <dl class="stats"></dl>
+        <p class="muted small sv-text"></p>
+      </details>
       <p class="error small sv-error" hidden></p>
     </aside>
   </div>

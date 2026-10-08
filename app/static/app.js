@@ -137,6 +137,7 @@ async function openProject(pid) {
   if (!state.project || state.project.id !== pid) {
     state.selected = null;
     state.sheetError = "";
+    state.viewOpen = state.redrawOpen = state.historyOpen = undefined;   // 캐릭터를 바꾸면 접기·펼치기는 처음 상태로
     clearMotionView();
     $("#activity").replaceChildren();
     delete $("#activity").dataset.key;
@@ -232,6 +233,15 @@ function renderSettings() {
   const mirrored = dirsFor(s.count).length - gen.length;
   $("#plan-text").textContent = `영상 AI로 만들 방향 ${gen.length}개 (${gen.map(d => ARROWS[d] + d).join(" ")})` +
     (mirrored ? ` · 반전으로 채울 방향 ${mirrored}개` : "");
+  /* 다 정한 뒤에는 한 줄 요약으로 접는다 (방향 그림이 생기면 기본으로 접힘, '바꾸기'로 펼침) */
+  const preset = presets.find(p => p.deg === s.angle);
+  $("#view-summary-text").textContent = [preset ? preset.label : `${s.angle}°`,
+    `${s.count}방향${mirrored ? "(왼쪽은 반전)" : ""}`,
+    s.style === "pixel" ? `픽셀아트 ${s.pixel_height}px` : "HD"].join(" · ");
+  const open = state.viewOpen ?? !state.project.sheet;
+  $("#view-detail").hidden = !open;
+  $("#btn-view-toggle").textContent = open ? "접기" : "바꾸기";
+  $("#btn-view-toggle").setAttribute("aria-expanded", String(open));
 }
 
 async function saveSettings(patch) {
@@ -251,6 +261,10 @@ function setupSettings() {
   $$("#style-seg button").forEach(b => b.addEventListener("click", () => saveSettings({ style: b.dataset.style })));
   $("#mirror").addEventListener("change", e => saveSettings({ mirror: e.target.checked }));
   $("#pixel-height").addEventListener("change", e => saveSettings({ pixel_height: +e.target.value }));
+  $("#btn-view-toggle").addEventListener("click", () => {
+    state.viewOpen = $("#view-detail").hidden;
+    renderSettings();
+  });
 }
 
 /* ---------- 2 · 방향 그림 ---------- */
@@ -303,12 +317,20 @@ function renderSheet() {
     });
     return b;
   }));
-  hist.hidden = p.sheets.length < 2;
+  /* 부가 기능은 작은 링크로: 예전 그림은 눌러야, 한 방향 다시 그리기는 누르거나 앞뒤가 바뀐 칸이 있을 때만 */
+  hist.hidden = p.sheets.length < 2 || !state.historyOpen;
+  $("#btn-history-toggle").hidden = p.sheets.length < 2;
+  $("#btn-history-toggle").textContent = `예전 그림 (${p.sheets.length})`;
+  $("#btn-history-toggle").setAttribute("aria-expanded", String(!hist.hidden));
 
   const box = $("#sheet-job");
   const job = p.active_jobs.find(j => j.kind === "sheet");
+  const canRedraw = !!sh && !sh.problem;
+  const showRedraw = canRedraw && (state.redrawOpen || (sh.facing || []).length > 0);
   $("#btn-sheet").disabled = !!job;
-  $("#redraw-row").hidden = !sh || !!sh.problem;
+  $("#btn-redraw-toggle").hidden = !canRedraw;
+  $("#btn-redraw-toggle").setAttribute("aria-expanded", String(showRedraw));
+  $("#redraw-row").hidden = !showRedraw;
   $("#btn-redraw").disabled = !!job;
   box.hidden = !job;
   if (job) {
@@ -348,6 +370,8 @@ function setupSheet() {
   });
   $("#sheet-btn").addEventListener("click", () => openImage($("#sheet-img").src, "방향 그림"));
   $("#p-turn-btn").addEventListener("click", () => openImage($("#p-turn").src, "삼면도"));
+  $("#btn-redraw-toggle").addEventListener("click", () => { state.redrawOpen = $("#redraw-row").hidden; renderSheet(); });
+  $("#btn-history-toggle").addEventListener("click", () => { state.historyOpen = $("#sheet-history").hidden; renderSheet(); });
 }
 
 function openImage(src, alt) {
@@ -374,6 +398,17 @@ function setFx(mode, auto) {
   fxMode = mode;
   $$("#fx-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.fx === mode)));
   $("#fx-hint").textContent = FX_HINT[mode] + (auto && mode !== "none" ? " (설명을 보고 골랐어요)" : "");
+  updateAdvSummary();
+}
+
+/* 고급 옵션(프레임·이름·방향 맞추는 방식·빛 효과)은 접어 두고, 지금 값만 한 줄로 보여 준다 */
+function updateAdvSummary() {
+  const sum = $("#adv-summary");
+  if (!sum) return;
+  sum.textContent = [`프레임 ${$("#m-frames").value}`, MODE_LABEL[motionMode] || "", FX_LABEL[fxMode] || ""].filter(Boolean).join(" · ");
+  const open = !$("#adv-motion").hidden;
+  $("#adv-label").textContent = open ? "고급 옵션 ▾" : "고급 옵션 ▸";
+  $("#btn-adv").setAttribute("aria-expanded", String(open));
 }
 
 function setMode(mode) {
@@ -418,7 +453,11 @@ function setupMotionForm() {
     if (!modeTouched) setMode(defaultMode());
     suggestFrames();
   }));
-  $("#m-frames").addEventListener("change", () => { framesTouched = true; });
+  $("#m-frames").addEventListener("change", () => { framesTouched = true; updateAdvSummary(); });
+  $("#btn-adv").addEventListener("click", () => {
+    $("#adv-motion").hidden = !$("#adv-motion").hidden;
+    updateAdvSummary();
+  });
   $$("#mode-cards input").forEach(r => r.addEventListener("change", () => {
     if (!r.checked) return;
     modeTouched = true;
@@ -483,6 +522,11 @@ async function setupMotionSet() {
     return lab;
   }));
   updateSetEta();
+  $("#btn-set-pick").addEventListener("click", () => {
+    const items = $("#set-items");
+    items.hidden = !items.hidden;
+    $("#btn-set-pick").setAttribute("aria-expanded", String(!items.hidden));
+  });
   $("#btn-set").addEventListener("click", async () => {
     const keys = $$("#set-items input:checked").map(c => c.value);
     showText("#set-error", "");
@@ -511,7 +555,7 @@ function updateSetEta() {
   const sec = state.setItems.filter(it => keys.has(it.key))
     .reduce((a, it) => a + (it.mode === "mannequin" ? 50 : 0) + n * dirSec(it.kind, it.mode, "text", it.hold_end), 0);
   const btn = $("#btn-set");
-  btn.textContent = `세트 만들기 (${keys.size}개) · 예상 ${Math.max(1, Math.round(sec / 60))}분`;
+  btn.textContent = `기본 동작 한 번에 만들기 (${keys.size}개) · 예상 ${Math.max(1, Math.round(sec / 60))}분`;
   btn.disabled = !state.project.sheet || !keys.size;
 }
 
@@ -529,6 +573,7 @@ function updateEta() {
   btn.disabled = noSheet || submitting;
   $("#motion-eta").textContent = noSheet ? "먼저 2번에서 방향 그림을 만들어 주세요"
     : `${n}방향 생성${n < all ? ` + 반전 ${all - n}방향` : ""}`;
+  updateAdvSummary();
 }
 
 /* ---------- 결과: 동작 탭 ---------- */
@@ -1175,12 +1220,23 @@ function setupConfig() {
   });
 }
 
+/* 받기 파일 5개를 버튼 하나 아래 메뉴로: 바깥을 누르거나 Esc, 파일을 고르면 닫힌다 */
+function setupExports() {
+  const btn = $("#btn-export"), menu = $("#export-menu");
+  const toggle = open => { menu.hidden = !open; btn.setAttribute("aria-expanded", String(open)); };
+  btn.addEventListener("click", e => { e.stopPropagation(); toggle(menu.hidden); });
+  menu.addEventListener("click", e => { if (e.target.closest("a")) toggle(false); });
+  document.addEventListener("click", e => { if (!menu.hidden && !e.target.closest("#exports")) toggle(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !menu.hidden) { toggle(false); btn.focus(); } });
+}
+
 async function init() {
   setupNewDialog();
   setupSettings();
   setupSheet();
   setupMotionForm();
   setupMotionSet();
+  setupExports();
   setupConfig();
   requestAnimationFrame(frame);
   loadStatus();
