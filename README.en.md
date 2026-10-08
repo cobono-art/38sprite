@@ -30,7 +30,7 @@ A real result (8-direction walk sheets):
 | Directions · camera | 8, 4 or 2 directions, from eye level to top-down (default: 45° high quarter view). |
 | HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. |
 | Light effects | None · vivid · strip. Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
-| Magenta from start to end | Every mode, including the 3D mannequin, generates on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated once with a new seed and the cleaner result is kept. |
+| Magenta from start to end | Every mode, including the 3D mannequin, generates on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated with a new seed (up to twice by default) and the cleanest result is kept. |
 | AI matting (optional) | BEN v2 (MIT) fixes only what chroma keying gets wrong: holes in colors close to the background, floor shadows and colored fringes. Used automatically after `setup_matting.bat` downloads the model (about 380 MB). |
 | Automatic checks | Flags holes, magenta/green fringes, loop seams, cut-offs at the frame edge, per-direction size differences, empty frames and mid-clip background color changes, and marks the frames. |
 | Post-processing | Change playback speed, swap a bad frame for another moment of the video, or remake one direction (and undo it if you liked the old one better), without regenerating everything. |
@@ -74,12 +74,18 @@ turnaround ─▶ Codex: 8-direction grid (3×3) ─▶ first frame per directio
 
 ## Install and run
 
-1. Start ComfyUI. The default address is `http://127.0.0.1:8189`; change it in the app's settings if yours differs.
-2. Get this repository and run `run_app.bat`. It finds the Python bundled with ComfyUI. If it can't, create
-   `python_path.txt` in this folder with the full path to `python.exe` on one line.
+1. Start ComfyUI. On the first run the app looks for a running ComfyUI (ports 8188, 8189, 8000) and writes the one
+   with the H3 model into `config.json`. If yours is elsewhere, change it in the app's connection settings.
+2. Get this repository and run `run_app.bat`. It uses the Python of the running ComfyUI, or looks in common install
+   locations on drives C–F, and remembers it in `python_path.txt`. If it can't find one, create `python_path.txt` in
+   this folder with the full path to `python.exe` on one line.
 3. `http://127.0.0.1:7870` opens in your browser. Use the KO/EN button at the top to switch the interface language.
+   The start screen lists optional tools you haven't installed yet.
 
 To run it directly: `python app/server.py --port 7870 --open`
+
+Developers can run the tests with `python -m unittest discover -s tests` (no extra installs, no video AI — they use
+fake frames). They also run automatically on Windows and Linux for every push.
 
 ## Workflow
 
@@ -133,14 +139,14 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 
 | Key | Default | Meaning |
 |---|---|---|
-| `comfy_url` | `http://127.0.0.1:8189` | ComfyUI address |
+| `comfy_url` | (found automatically on the first run, else `http://127.0.0.1:8188`) | ComfyUI address |
 | `port` | `7870` | Port of this app |
 | `video_backend` | `h3` | `h3`, or `custom` (swap the video AI with your own workflow) |
 | `workflow_dir` | `workflows` | Folder with your workflow files when `custom` |
 | `models` | (default H3 file names) | Only if your H3 model files are named differently |
 | `matting` | `auto` | AI matting: `auto` (use the model if present) or `off` |
 | `matting_dir` | `models/ben2` | Folder with the BEN v2 files (`BEN2.py`, `model.safetensors`) |
-| `bg_retry` | `1` | How many times to regenerate with a new seed when the video AI changes the background color (0 = never) |
+| `bg_retry` | `2` | How many times to regenerate with a new seed when the video AI changes the background color (0 = never) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
 
 ## Please read: licenses and notes
@@ -174,8 +180,9 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 - Automatic checks are hints for common defects. For "vivid" effect motions some checks (holes, cut-offs, size, empty
   frames) are skipped because of the light trails.
 - The basic motion set makes 6 motions in a row and takes over an hour on an RTX 5080.
-- In light-effect scenes the video AI tends to change the magenta background to red, orange, green and so on. Each
-  direction is checked as soon as it arrives and regenerated once with a new seed; if both attempts drift, the cleaner
+- Depending on the seed, the video AI may flip the magenta background to yellow, cyan, red and so on every few frames
+  (especially in light-effect scenes; prompt wording does not prevent it). Each
+  direction is checked as soon as it arrives and regenerated with a new seed (up to twice); if every attempt drifts, the cleanest
   one is kept and the automatic checks mark "background color changed".
 - Videos are processed at 24 fps.
 

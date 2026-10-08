@@ -505,10 +505,10 @@ def _reseed(wf):
 def _generate(job, server, items, mdir, expect_magenta=True):
     """items: [(방향, 워크플로)] — 큐에 넣고 순서대로 받아 frames/<방향>과 raw/<방향>.webp로 저장한다.
     expect_magenta: 받은 영상의 배경이 마젠타로 이어지는지 본다. 영상 AI가 배경을 다른 색으로 바꾼 프레임이 10%를
-    넘으면 새 시드로 한 번 더 만들어(bg_retry, 기본 1번) 덜 바뀐 쪽을 쓴다. 크로마키로 깨끗하게 오리려면 처음부터
+    넘으면 새 시드로 다시 만들어(bg_retry, 기본 2번) 가장 덜 바뀐 쪽을 쓴다 (배경이 바뀌는 건 프롬프트가 아니라 시드가 정한다 — 2026-10-08 실험). 크로마키로 깨끗하게 오리려면 처음부터
     끝까지 마젠타여야 한다."""
     client = uuid.uuid4().hex
-    retries = int(store.load_config().get("bg_retry", 1)) if expect_magenta else 0
+    retries = int(store.load_config().get("bg_retry", 2)) if expect_magenta else 0
     queued = []
     for d, wf in items:
         prompt_id = comfy.queue(server, wf, client)

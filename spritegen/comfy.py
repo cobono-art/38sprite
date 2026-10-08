@@ -271,11 +271,21 @@ def error_text(entry):
     return "알 수 없는 오류"
 
 
-def wait(server, prompt_id, poll=5, on_tick=None):
+def wait(server, prompt_id, poll=5, on_tick=None, offline_limit=120):
+    """작업이 끝날 때까지 기다린다. 잠깐 연결이 안 되면(포트 부족·ComfyUI가 바쁨) offline_limit초까지 다시 묻는다
+    (2026-10-08 실험 12개를 기다리다 한 번의 연결 오류로 전체가 멈춘 적이 있다)."""
     t0 = time.time()
-    missing_since = None
+    missing_since = offline_since = None
     while True:
-        st, entry = state(server, prompt_id)
+        try:
+            st, entry = state(server, prompt_id)
+            offline_since = None
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            offline_since = offline_since or time.time()
+            if time.time() - offline_since > offline_limit:
+                raise RuntimeError(f"ComfyUI에 {offline_limit}초 넘게 연결하지 못했어요 ({e})") from e
+            time.sleep(poll)
+            continue
         if st == "done":
             return entry, time.time() - t0
         if st == "error":

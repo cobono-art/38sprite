@@ -1,5 +1,5 @@
 {
-  "comfy_url": "http://127.0.0.1:8189",
+  "comfy_url": "http://127.0.0.1:8188",
   "port": 7870,
   "video_backend": "h3",
   "workflow_dir": "workflows",

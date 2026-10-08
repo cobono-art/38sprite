@@ -117,6 +117,11 @@ const EN = {
   "영상 AI가 영상 중간에 배경을 마젠타가 아닌 색으로 바꿨어요. 효과 둘레가 덜 깨끗할 수 있어요 — 이 방향만 다시 만들어 보세요.":
     "The video AI changed the background away from magenta mid-clip. Edges around effects may be less clean — try remaking just this direction.",
   "이 방향만 캐릭터 키가 달라요. 방향 그림을 확인해 보세요.": "The character height differs only in this direction. Check the direction drawing.",
+  "더 좋게 (선택, 앱 폴더에서 한 번 실행): setup_matting.bat — AI 배경 지우기":
+    "Better results (optional, run once in the app folder): setup_matting.bat — AI matting",
+  "더 좋게 (선택, 앱 폴더에서 한 번 실행): setup_pose.bat — 영상 → 3D 뼈대":
+    "Better results (optional, run once in the app folder): setup_pose.bat — video → 3D skeleton",
+  "setup_pose.bat — 영상 → 3D 뼈대": "setup_pose.bat — video → 3D skeleton",
   // 진행 · 확인 · 실패
   "중지": "Stop", "준비 중": "Preparing", "키프레임 짜는 중": "Writing keyframes", "3D 마네킹 미리보기": "3D mannequin preview",
   "마네킹 확인을 기다려요": "Waiting for mannequin review", "마스터 확인을 기다려요": "Waiting for master review",

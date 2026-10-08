@@ -59,6 +59,25 @@ class PipelineHelpersTest(unittest.TestCase):
         finally:
             comfy.http_json = saved
 
+    def test_wait_survives_short_disconnect(self):
+        calls = {"n": 0}
+
+        def flaky(server, prompt_id):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise OSError("WinError 10048")                  # 잠깐 연결 실패
+            return ("running", None) if calls["n"] < 4 else ("done", {"outputs": {}})
+        saved = comfy.state
+        comfy.state = flaky
+        try:
+            entry, _ = comfy.wait("http://x", "p", poll=0)
+            self.assertEqual(entry, {"outputs": {}})
+            calls["n"] = -10**9                                  # 계속 실패하면 한도 뒤에 멈춘다
+            with self.assertRaises(RuntimeError):
+                comfy.wait("http://x", "p", poll=0.01, offline_limit=0.05)
+        finally:
+            comfy.state = saved
+
     def test_bg_drift(self):
         frames = [walk_frame(t) for t in range(20)] + [walk_frame(t, bg=(0, 230, 0)) for t in range(20, 30)]
         with TempDir() as td:

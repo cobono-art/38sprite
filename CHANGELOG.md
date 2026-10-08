@@ -3,6 +3,25 @@
 버전은 [깃허브 릴리스](https://github.com/cobono-art/38sprite/releases) 태그와 같습니다. 앱 화면 왼쪽 위에서 지금 버전을 볼 수 있어요.
 Versions match the [GitHub release](https://github.com/cobono-art/38sprite/releases) tags. The app shows its version at the top left.
 
+## v0.2.1 — 2026-10-08
+
+**처음 쓰는 사람 설치 / First-time setup**
+- 처음 켤 때 켜져 있는 ComfyUI(8188·8189·8000)를 찾아, H3 모델 파일이 있는 쪽 주소를 `config.json`에 적어 둡니다. 기본 주소는 ComfyUI 표준인 8188로 바꿨습니다.
+- `run_app.bat`이 켜져 있는 ComfyUI의 파이썬을 쓰고, 없으면 C~F 드라이브의 흔한 설치 위치를 찾아 `python_path.txt`에 기억합니다 (전에는 E 드라이브 등은 못 찾았음).
+- 첫 화면에 아직 설치하지 않은 선택 도구(AI 배경 지우기, 영상 → 3D 뼈대)를 알려 줍니다.
+- The app finds a running ComfyUI with the H3 model on first launch; `run_app.bat` finds ComfyUI's Python on more drives; the start screen lists missing optional tools.
+
+**안정성 / Reliability**
+- 영상을 기다리는 동안 잠깐 연결이 끊겨도(포트 부족 등) 2분까지 다시 물어서, 작업 전체가 실패하지 않습니다.
+- 배경이 마젠타에서 바뀌면 새 시드로 다시 만드는 횟수 기본값을 2번으로 올렸습니다. 실험(같은 동작 · 시드 3개 × 프롬프트 3가지)에서 배경이 바뀌는 건 프롬프트 문구가 아니라 시드가 정했습니다.
+- 빛 효과 알파에서 배경색 그대로 어두워진 곳(그림자)을 남기지 않습니다.
+- Polling survives short disconnects; background-drift retries default to 2 (drift depends on the seed, not the prompt); shadows are dropped from light alpha.
+
+**개발 / Development**
+- 자동 테스트 29개(`python -m unittest discover -s tests`, 추가 설치·영상 AI 없이 가짜 프레임으로)와 깃허브 자동 검사(윈도우·리눅스)를 넣었습니다.
+- `requirements.txt`의 OpenCV를 화면 없는 판(opencv-python-headless)으로 바꿨습니다.
+- Automated tests and GitHub Actions CI; headless OpenCV in requirements.
+
 ## v0.2.0 — 2026-10-08
 
 **처음부터 끝까지 마젠타 배경 / Magenta from start to end**
