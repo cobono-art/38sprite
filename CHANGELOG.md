@@ -3,6 +3,40 @@
 버전은 [깃허브 릴리스](https://github.com/cobono-art/38sprite/releases) 태그와 같습니다. 앱 화면 왼쪽 위에서 지금 버전을 볼 수 있어요.
 Versions match the [GitHub release](https://github.com/cobono-art/38sprite/releases) tags. The app shows its version at the top left.
 
+## v0.4.0 — 2026-10-09
+
+**빛 궤적 빼기 / Light-trail removal**
+- 영상 AI(H3)는 '효과 없음'이어도 휘두르는 동작에 큰 궤적·별빛·빛무리를 그렸습니다. 원인 두 가지를 고쳤습니다.
+  - 프롬프트의 금지문("no slash trails, no glow …")이 오히려 그 낱말을 그리게 했습니다(H3 공식 안내와 같음). 영상
+    프롬프트는 원하는 상태만 긍정형으로 적습니다.
+  - H3는 네거티브 프롬프트가 없습니다. NegPiP 원리를 직접 구현한 ComfyUI 노드(`comfyui_nodes/sprite_neg_h3`)로
+    효과 없이 만드는 동작에서 궤적·반짝임·빛무리를 생성 단계에서 뺍니다. 생성 시간은 그대로입니다.
+    `setup_negative.bat`으로 ComfyUI에 설치하면 앱이 알아서 씁니다 (설정 `negative_words`·`negative_weight`).
+  - 시험(같은 시드): 정면·옆 공격, 공격 5방향, 춤 5방향에서 궤적이 사라지고 동작은 그대로, 걷기는 변화 없음.
+- Prompts no longer name unwanted things (that made H3 draw them), and a ComfyUI node written for 38Sprite removes light
+  trails, sparkles and glows during generation at the same speed. Install it with `setup_negative.bat`.
+
+**3D 마네킹 / 3D mannequin**
+- 기본 레퍼런스를 원통 마네킹에서 사람 3D 모델(머리카락 없는 점토 모습)로 바꿨습니다. 원통 마네킹은 앞팔·뒤팔이
+  똑같아 보여서 영상 AI가 뒤쪽 빈손을 휘두르곤 했습니다. 새 프롬프트로는 사람 모델의 생김새를 베끼지 않았습니다.
+  뼈대 도구 가상환경(`setup_pose.bat`)이 없으면 원통 마네킹을 씁니다 (설정 `mannequin_body`).
+- 마네킹이 무기를 들지 않게 된 뒤로 "빈손은 비워 둬" 문장이 캐릭터 무기를 치우게 해서, "든 물건은 같은 손에, 그
+  손과 함께 움직인다"로 바꿨습니다.
+- The mannequin reference is now a shaded human model (bald clay) instead of capsules, so the video AI can tell which
+  arm is in front; the prompt keeps the character's held item in its hand.
+
+**영상 AI 켜기 / Starting the video AI**
+- 앱을 켤 때 이 PC의 ComfyUI가 꺼져 있으면 마지막으로 본 실행 옵션 그대로 켭니다 (`comfy_autostart`).
+- 빛 궤적 빼기 노드가 깔렸는데 ComfyUI가 추가 노드를 끈 채로(`--disable-all-custom-nodes`) 켜져 있으면, 위쪽의
+  '빛 궤적 빼기 켜기' 버튼이 같은 옵션에 이 노드만 허용해서 다시 켭니다.
+- The app starts the local ComfyUI if it is off, and a button restarts it with the trail-removal node allowed.
+
+**더 빠르고 더 깨끗하게 / Faster and cleaner**
+- '방향별 바로' 모드의 생성 단계를 8 → 6으로 줄였습니다(약 25% 빠름, 같은 품질; 설정 `turbo_steps`).
+- 영상 AI가 마젠타 배경 위에 동심원·소용돌이 무늬를 그리면 배경이 바뀐 것으로 보고 새 시드로 다시 만듭니다.
+- Per-direction mode uses 6 steps instead of 8 (about 25% faster); patterned backgrounds (rings, swirls) trigger a
+  regeneration with a new seed.
+
 ## v0.3.0 — 2026-10-08
 
 **화면 간소화 / Simpler screen**
