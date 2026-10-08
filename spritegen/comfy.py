@@ -211,6 +211,14 @@ def turbo_steps():
     return max(1, int(project.load_config().get("turbo_steps", 6)))
 
 
+def turbo_r2v_steps():
+    """터보 레퍼런스 투 비디오(마네킹 모드) 단계 수 (설정 turbo_r2v_steps, 기본 6). 2026-10-09 시험(사람 모델 마네킹 공격,
+    시드 8개): LoRA 이름대로 4단계면 시드 40%쯤이 배경을 얼룩·동심원으로 망가뜨려 새 시드로 다시 만들어야 했는데, 6단계는
+    같은 시드가 모두 깨끗했고 동작·선명도는 같았다. 한 개에 약 97초 → 158초지만 다시 만들 일이 없어 평균 시간은 비슷하다."""
+    from . import project
+    return max(1, int(project.load_config().get("turbo_r2v_steps", 6)))
+
+
 def i2v_workflow(first, last, prompt, width, height, length, seed, prefix, turbo=True, guides=None):
     """이미지→영상: 첫·끝 프레임 고정 (+ 중간 자세 고정). first가 None이면 텍스트→영상.
     사용자 워크플로에서는 중간 자세 고정(guides)은 쓰지 않는다."""
@@ -248,7 +256,8 @@ def r2v_workflow(ref_image, ref_video, prompt, width, height, length, seed, pref
     backend, M, wdir = settings()
     if backend == "custom":
         return from_template(wdir / "r2v.json", REF_IMAGE=ref_image, REF_VIDEO=ref_video, PROMPT=prompt, WIDTH=width,
-                             HEIGHT=height, LENGTH=length, SEED=seed, STEPS=4 if turbo else 20, PREFIX=prefix)
+                             HEIGHT=height, LENGTH=length, SEED=seed, STEPS=turbo_r2v_steps() if turbo else 20,
+                             PREFIX=prefix)
     wf = {
         "m_unet": {"class_type": "UNETLoader", "inputs": {"unet_name": M["r2v"], "weight_dtype": "default"}},
         "m_clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": M["clip"], "type": "minimax", "device": "default"}},
@@ -268,7 +277,7 @@ def r2v_workflow(ref_image, ref_video, prompt, width, height, length, seed, pref
                          "inputs": {"model": model, "lora_name": M["turbo_r2v"], "strength_model": 1.0}}
         model = ["m_turbo", 0]
     cond = _add_guides(wf, ["r_cond", 0], ["r_cond", 1], ["m_vae", 0], guides)
-    return _sampler_tail(wf, model, cond, ["r_cond", 1], ["m_vae", 0], 4 if turbo else 20, seed, prefix)
+    return _sampler_tail(wf, model, cond, ["r_cond", 1], ["m_vae", 0], turbo_r2v_steps() if turbo else 20, seed, prefix)
 
 
 FRONT = False      # True면 대기열 맨 앞에 넣는다 (급한 작업용)

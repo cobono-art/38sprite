@@ -132,6 +132,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 | `models` | (H3 기본 파일 이름) | H3 모델 파일 이름이 다를 때만 |
 | `matting` | `auto` | AI 배경 지우기: `auto`(모델이 있으면 씀) 또는 `off` |
 | `matting_dir` | `models/ben2` | BEN v2 파일(`BEN2.py`, `model.safetensors`)이 있는 폴더 |
+| `turbo_r2v_steps` | `6` | 3D 마네킹 모드의 영상 생성 단계 수 (4면 빠르지만 시드 40%쯤이 배경을 얼룩·동심원으로 망가뜨려 다시 만들어야 함) |
 | `turbo_steps` | `6` | 방향별 바로 모드의 영상 생성 단계 수 (8이면 예전과 같고 약 25% 느림, 4는 배경에 잡티가 남음) |
 | `negative_weight` | `1.5` | 빛 궤적 빼기 노드의 세기 (0이면 안 씀). 노드가 설치돼 있고 빛 효과가 '없음'·'지우기'인 동작에만 씁니다 |
 | `negative_words` | (궤적·반짝임·빛무리 등) | 빛 궤적 빼기 노드로 뺄 것 (영어, 쉼표로) |

@@ -152,6 +152,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `models` | (default H3 file names) | Only if your H3 model files are named differently |
 | `matting` | `auto` | AI matting: `auto` (use the model if present) or `off` |
 | `matting_dir` | `models/ben2` | Folder with the BEN v2 files (`BEN2.py`, `model.safetensors`) |
+| `turbo_r2v_steps` | `6` | Generation steps for 3D mannequin mode (4 is faster, but about 40% of seeds turn the background into blotches or rings and need a redo) |
 | `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
 | `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
 | `negative_words` | (trails, sparkles, glows …) | What the node removes (English, comma-separated) |

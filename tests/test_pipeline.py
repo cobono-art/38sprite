@@ -47,6 +47,9 @@ class PipelineHelpersTest(unittest.TestCase):
             self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x", turbo=False)), 20)
             project.load_config = lambda: {"turbo_steps": 8}
             self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x")), 8)
+            project.load_config = lambda: {}
+            self.assertEqual(steps(comfy.r2v_workflow("a.png", "m.mp4", "p", 640, 640, 73, 1, "x", turbo=True)), 6)
+            self.assertEqual(steps(comfy.r2v_workflow("a.png", "m.mp4", "p", 640, 640, 73, 1, "x")), 20)
         finally:
             project.load_config = saved
 
