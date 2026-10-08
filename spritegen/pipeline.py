@@ -462,6 +462,10 @@ def render_mannequin_refs(pid, mid, gen, meta, server):
     scale = 0.9 * char_px / (1.62 * cos_e + 0.15)
     length = comfy.frames_for_seconds(m.get("seconds", 5))
     poses, _ = mannequin_poses(m, mdir, length)
+    # 마네킹이 든 막대(무기)는 영상에 그리지 않는다: 그리면 지팡이를 든 캐릭터도 칼을 든 모습으로 바뀐다
+    # (2026-10-08 실험: 막대 있음 4개 중 2개 칼로 바뀜, 막대 없음 4개 모두 원래 무기). 무엇을 들었는지는 첫 프레임이
+    # 정하고, 칼끝까지 화면에 들어오게 크기를 정하는 계산(frame_fit)에서만 막대를 쓴다.
+    poses = [{k: v for k, v in P.items() if not k.startswith("sword")} for P in poses]
     center = (0.5, meta["feet_y"] / H)
     files = {}
     tools = body_tools()
