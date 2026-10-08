@@ -96,7 +96,8 @@ async function loadStatus() {
     state.status = st;
     if (st.version) $("#app-version").textContent = `v${st.version}`;
     /* 처음 쓰는 사람에게: 아직 설치 안 한 선택 도구 */
-    const missing = [!st.matting && "setup_matting.bat — AI 배경 지우기", !st.pose && "setup_pose.bat — 영상 → 3D 뼈대"]
+    const missing = [!st.matting && "setup_matting.bat — AI 배경 지우기", !st.pose && "setup_pose.bat — 영상 → 3D 뼈대",
+      st.comfy && st.comfy.ok && st.comfy.backend !== "custom" && !st.comfy.neg_node && "setup_negative.bat — 빛 궤적 빼기 (ComfyUI 다시 켜기)"]
       .filter(Boolean);
     $("#optional-tools").hidden = !missing.length;
     $("#optional-tools").textContent = missing.length ? `더 좋게 (선택, 앱 폴더에서 한 번 실행): ${missing.join(" · ")}` : "";

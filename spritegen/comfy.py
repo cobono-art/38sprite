@@ -126,10 +126,38 @@ def check(server):
         return info
     info.update(i2v=M["i2v"] in unets, r2v=M["r2v"] in unets, turbo_i2v=M["turbo_i2v"] in loras,
                 turbo_r2v=M["turbo_r2v"] in loras)
+    try:                                               # 선택: 빛 궤적을 빼는 노드 (comfyui_nodes/sprite_neg_h3)
+        info["neg_node"] = bool(http_json(f"{server}/object_info/{NEG_NODE}", timeout=10))
+    except (urllib.error.URLError, OSError, ValueError):
+        info["neg_node"] = False
     info["ok"] = info["i2v"]
     if not info["i2v"]:
         info["error"] = f"H3 이미지→영상 모델({M['i2v']})이 이 ComfyUI의 models 폴더에 없어요"
     return info
+
+
+NEG_NODE = "SpriteNegativeH3"
+# 효과 없이 만들 동작에서 빼는 낱말 (설정 negative_words로 바꿀 수 있다). 2026-10-08 시험에서 이 목록 ×1.5로
+# 마네킹 공격의 지팡이 빛·반짝임·궤적이 모두 사라지고 동작은 그대로였다.
+NEGATIVE_WORDS = ("glowing slash trail, light arc, crescent streak, sparkles, star burst, glow, aura, particles, "
+                  "motion smear, afterimage, energy swirl, colored rings")
+
+
+def add_negative(wf, words=None, weight=None):
+    """H3 워크플로에 '빼는 낱말' 노드를 끼운다 (가이드까지 붙은 조건 → 노드 → BasicGuider). 설정 negative_words·
+    negative_weight(기본 1.5)를 쓰고, weight가 0이거나 낱말이 없으면 그대로 둔다. 사용자 워크플로(custom)는 건드리지 않는다."""
+    from . import project
+    cfg = project.load_config()
+    words = cfg.get("negative_words", NEGATIVE_WORDS) if words is None else words
+    weight = float(cfg.get("negative_weight", 1.5)) if weight is None else weight
+    g = wf.get("s_guider", {}).get("inputs", {})
+    if not words or weight <= 0 or "m_clip" not in wf or "conditioning" not in g:
+        return wf
+    wf["s_neg"] = {"class_type": NEG_NODE, "inputs": {"model": g["model"], "clip": ["m_clip", 0],
+                                                       "conditioning": g["conditioning"], "negative": words,
+                                                       "weight": weight, "block_start": 0, "block_end": 256}}
+    wf["s_guider"] = {"class_type": "BasicGuider", "inputs": {"model": ["s_neg", 0], "conditioning": ["s_neg", 1]}}
+    return wf
 
 
 def upload(server, path, name):

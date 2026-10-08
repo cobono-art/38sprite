@@ -721,6 +721,11 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
         # 새로 만드는 프레임에는 예전에 바꿔 둔 장면 번호가 맞지 않으니 지운다
         _set_motion(pid, mid, seed=seed, master=master, frame_overrides=None)
     info = comfy.check(server)
+    # 효과 없이 만들 동작은 '빼는 낱말' 노드(ComfyUI에 설치돼 있을 때만)로 빛 궤적·반짝임·빛무리를 생성 단계에서 뺀다.
+    # 프롬프트에 "궤적 없이"라고 적으면 오히려 그 낱말이 내용으로 읽혀서, 빼는 건 이 노드로만 한다.
+    def neg(wf):
+        return comfy.add_negative(wf) if info.get("neg_node") and not fx else wf
+
     video = None
     if m["source"] == "video":
         job.message = "레퍼런스 영상 준비 중"
@@ -739,7 +744,7 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
             prompt = motion_prompt(m["kind"], m["text"], s["angle"], d, s["style"], fx, hold_end)
             wf = comfy.i2v_workflow(first, None if hold_end else first, prompt, *FRAME_SIZE, length, seed, prefix)
         (mdir / "first" / f"{d}.prompt.txt").write_text(prompt, encoding="utf-8")
-        return d, wf
+        return d, neg(wf)
 
     if phase == "master":
         job.parts = {master: {"state": "queued", "sec": 0}}
@@ -765,9 +770,9 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
             prompt = mannequin_prompt(s["angle"], d, m.get("text", ""), s["style"], fx, gray=gray)
             (mdir / "first" / f"{d}.prompt.txt").write_text(prompt, encoding="utf-8")
             # 레퍼런스가 이미 그 방향에서 본 영상이라, 그대로 따라 하는 터보(4스텝)가 오히려 맞다
-            items.append((d, comfy.r2v_workflow(first, refs_mq[d], prompt, *FRAME_SIZE, length, seed,
-                                                f"spritegen/{pid}/{mid}_{d}", turbo=info.get("turbo_r2v", False),
-                                                guides=end_guides(first))))
+            items.append((d, neg(comfy.r2v_workflow(first, refs_mq[d], prompt, *FRAME_SIZE, length, seed,
+                                                    f"spritegen/{pid}/{mid}_{d}", turbo=info.get("turbo_r2v", False),
+                                                    guides=end_guides(first)))))
         if not _generate(job, server, items, mdir, expect_magenta=not gray):
             return
     elif phase == "rest":
@@ -786,9 +791,9 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
             prompt = follow_prompt(m["kind"], s["angle"], d, m.get("text", ""), s["style"], fx)
             (mdir / "first" / f"{d}.prompt.txt").write_text(prompt, encoding="utf-8")
             # 4스텝 터보는 레퍼런스의 보는 방향까지 그대로 베껴서(옆모습 마스터 → 정면도 옆모습), 20스텝으로 만든다
-            items.append((d, comfy.r2v_workflow(first, ref, prompt, *FRAME_SIZE, length, seed,
-                                                f"spritegen/{pid}/{mid}_{d}", turbo=False,
-                                                guides=[(first, 0), (first, -1)])))
+            items.append((d, neg(comfy.r2v_workflow(first, ref, prompt, *FRAME_SIZE, length, seed,
+                                                    f"spritegen/{pid}/{mid}_{d}", turbo=False,
+                                                    guides=[(first, 0), (first, -1)]))))
         if not _generate(job, server, items, mdir):
             return
     else:

@@ -31,6 +31,7 @@ A real result (8-direction walk sheets):
 | HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. |
 | Light effects | None · vivid · strip (under "Advanced"). Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
 | Magenta from start to end | Every mode, including the 3D mannequin, generates on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated with a new seed (up to twice by default) and the cleanest result is kept. |
+| Light-trail removal (optional) | The video AI (H3) has no negative prompt, and writing "no trails" makes it draw them. A ComfyUI node made for 38Sprite (install with `setup_negative.bat`) removes light trails, sparkles and glows during generation for motions without effects, at the same speed. |
 | AI matting (optional) | BEN v2 (MIT) fixes only what chroma keying gets wrong: holes in colors close to the background, floor shadows and colored fringes. Used automatically after `setup_matting.bat` downloads the model (about 380 MB). |
 | Automatic checks | Flags holes, magenta/green fringes, loop seams, cut-offs at the frame edge, per-direction size differences, empty frames and mid-clip background color changes, and marks the frames. |
 | Post-processing | Change playback speed, swap a bad frame for another moment of the video, or remake one direction (and undo it if you liked the old one better), without regenerating everything. |
@@ -69,6 +70,8 @@ turnaround ─▶ Codex: 8-direction grid (3×3) ─▶ first frame per directio
 - **(Optional) video → 3D skeleton tool**: run `setup_pose.bat` once. It installs MediaPipe into an app-only virtual
   environment (`.venv-pose`) and downloads the pose model (Google's official model, about 30 MB) into `models/`, without
   touching ComfyUI's Python. Needs Python 3.10–3.12; about 130 MB in total.
+- **(Optional) light-trail removal node**: run `setup_negative.bat` once to copy `comfyui_nodes/sprite_neg_h3` into the
+  `custom_nodes` folder of your video-AI ComfyUI (nothing is downloaded). Restart ComfyUI and the app uses it automatically.
 - **(Optional) AI matting model**: run `setup_matting.bat` once to download BEN v2 (PramaLLC, MIT) into `models/ben2`
   (about 380 MB). The Python bundled with ComfyUI already has torch, so nothing else needs installing.
 
@@ -149,7 +152,9 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `matting` | `auto` | AI matting: `auto` (use the model if present) or `off` |
 | `matting_dir` | `models/ben2` | Folder with the BEN v2 files (`BEN2.py`, `model.safetensors`) |
 | `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
-| `bg_retry` | `2` | How many times to regenerate with a new seed when the video AI changes the background color (0 = never) |
+| `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
+| `negative_words` | (trails, sparkles, glows …) | What the node removes (English, comma-separated) |
+| `bg_retry` | `2` | How many times to regenerate with a new seed when the video AI changes the background color or draws patterns (rings etc.) on it (0 = never) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
 
 ## Please read: licenses and notes
@@ -195,6 +200,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 app/          web server (aiohttp) and UI (HTML/JS)
 spritegen/    pipeline, background removal (incl. AI matting), loop search, sheet assembly, 3D mannequin, engine export, checks (qa)
 workflows/    example workflows for swapping the video AI
+comfyui_nodes/ ComfyUI node: light-trail removal (sprite_neg_h3, installed by setup_negative.bat)
 docs/         setup guides
 projects/     your results (created on first run, not committed)
 ```

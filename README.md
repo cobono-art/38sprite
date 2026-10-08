@@ -30,6 +30,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 | HD · 도트 | 같은 동작을 HD 시트와 도트(픽셀) 시트로 함께 뽑습니다. |
 | 빛 효과 | 없음 · 살리기 · 지우기 ('고급 옵션' 안). 동작 설명에 마법·검기 같은 말이 있으면 자동으로 '살리기'를 고릅니다. '살리기'는 캐릭터만 있는 층과 빛만 있는 층 시트도 같이 만듭니다. |
 | 처음부터 끝까지 마젠타 배경 | 크로마키로 깨끗하게 오리도록 3D 마네킹 모드까지 모두 마젠타 배경으로 만들고, 영상 AI가 중간에 배경색을 바꾸면 새 시드로 다시 만들어(기본 2번까지) 가장 덜 바뀐 쪽을 씁니다. |
+| 빛 궤적 빼기 (선택) | 영상 AI(H3)는 네거티브 프롬프트가 없고, "궤적 없이"라고 적으면 오히려 그 낱말을 그립니다. 38Sprite가 만든 ComfyUI 노드(`setup_negative.bat`으로 설치)가 효과 없이 만드는 동작에서 빛 궤적·반짝임·빛무리를 생성 단계에서 뺍니다. 생성 시간은 그대로입니다. |
 | AI 배경 지우기 (선택) | BEN v2(MIT)로 크로마키가 틀리는 곳만 고칩니다: 배경과 비슷한 색에 난 구멍, 바닥 그림자, 색 테두리. `setup_matting.bat`으로 모델(약 380MB)을 받으면 자동으로 씁니다. |
 | 자동 점검 | 구멍, 테두리 색 번짐(분홍·초록), 반복 이음새 튐, 화면 밖 잘림, 방향별 크기 차이, 빈 칸, 영상 중간 배경색 바뀜을 찾아 그 장을 표시합니다. |
 | 후처리 | 다시 만들지 않고 재생 속도 조절, 어색한 칸만 다른 장면으로 바꾸기, 한 방향만 다시 만들기(마음에 안 들면 전 결과로 되돌리기) |
@@ -65,6 +66,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 - **Codex CLI 로그인** (ChatGPT 계정): 8방향 그림과 마네킹 키프레임을 만들 때 씁니다. 없으면 8방향 그림을 직접 올려서 쓸 수 있습니다(마네킹 모드는 제외).
 - **파이썬**: ComfyUI에 딸린 파이썬을 그대로 쓰면 됩니다. 다른 파이썬을 쓰려면 `pip install -r requirements.txt`
 - **(선택) 영상 → 3D 뼈대 도구**: `setup_pose.bat`을 한 번 실행하면 앱 전용 가상환경(`.venv-pose`)에 MediaPipe를 깔고 자세 모델(구글 공식, 약 30MB)을 `models/`에 받습니다. ComfyUI 파이썬과는 섞이지 않습니다. 파이썬 3.10~3.12가 필요하고, 받는 크기는 모두 합쳐 약 130MB입니다.
+- **(선택) 빛 궤적 빼기 노드**: `setup_negative.bat`을 한 번 실행하면 `comfyui_nodes/sprite_neg_h3`를 영상 AI ComfyUI의 `custom_nodes` 폴더에 복사합니다(받는 것 없음). ComfyUI를 다시 켜면 앱이 알아서 씁니다.
 - **(선택) AI 배경 지우기 모델**: `setup_matting.bat`을 한 번 실행하면 BEN v2(PramaLLC, MIT)를 `models/ben2`에 받습니다(약 380MB). ComfyUI에 딸린 파이썬에는 torch가 이미 있어서 따로 설치할 것이 없습니다.
 
 ## 설치와 실행
@@ -131,7 +133,9 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 | `matting` | `auto` | AI 배경 지우기: `auto`(모델이 있으면 씀) 또는 `off` |
 | `matting_dir` | `models/ben2` | BEN v2 파일(`BEN2.py`, `model.safetensors`)이 있는 폴더 |
 | `turbo_steps` | `6` | 방향별 바로 모드의 영상 생성 단계 수 (8이면 예전과 같고 약 25% 느림, 4는 배경에 잡티가 남음) |
-| `bg_retry` | `2` | 영상 AI가 배경색을 바꿨을 때 새 시드로 다시 만들 횟수 (0이면 안 함) |
+| `negative_weight` | `1.5` | 빛 궤적 빼기 노드의 세기 (0이면 안 씀). 노드가 설치돼 있고 빛 효과가 '없음'·'지우기'인 동작에만 씁니다 |
+| `negative_words` | (궤적·반짝임·빛무리 등) | 빛 궤적 빼기 노드로 뺄 것 (영어, 쉼표로) |
+| `bg_retry` | `2` | 영상 AI가 배경색을 바꾸거나 마젠타 위에 무늬(동심원 등)를 그렸을 때 새 시드로 다시 만들 횟수 (0이면 안 함) |
 | `mannequin_bg` | `magenta` | 3D 마네킹 모드 배경: `magenta` 또는 예전 방식 `gray` |
 
 ## 꼭 읽어 주세요: 라이선스와 주의
@@ -160,6 +164,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 app/          웹 서버(aiohttp)와 화면(HTML/JS)
 spritegen/    생성 파이프라인, 배경 오리기(AI 배경 지우기 matting 포함), 루프 찾기, 시트 조립, 3D 마네킹, 엔진 내보내기(export), 자동 점검(qa)
 workflows/    영상 AI 교체용 예시 워크플로
+comfyui_nodes/ ComfyUI 노드: 빛 궤적 빼기(sprite_neg_h3, setup_negative.bat으로 설치)
 docs/         설치·교체 안내
 projects/     만든 결과물 (실행하면 생김, 저장소에는 올리지 않음)
 ```

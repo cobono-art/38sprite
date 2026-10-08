@@ -83,21 +83,21 @@ def redraw_prompt(d, deg, style="hd", pixel_height=64):
             "list any files.")
 
 
-CAMERA = "Locked-off static camera at the same angle: no zoom, no pan, no rotation, no camera shake. "
-# 배경은 처음부터 끝까지 마젠타 한 색: 영상 AI가 빛 효과 장면에서 배경을 빨강·주황·파랑으로 바꾸거나 흰색으로 바꾸면
-# 크로마키로 깨끗하게 오릴 수 없다 (2026-10-08 홍보영상 재료에서 실제로 일어남). 그래서 매 프레임 같다고 여러 번 못 박는다.
+# 영상 프롬프트는 원하는 상태만 긍정형으로 적는다. H3 공식 프롬프트 안내: "원하지 않는 것을 이름으로 적으면 그 낱말이
+# 내용으로 읽힌다" (H3는 CFG 증류라 네거티브도 없다). 2026-10-08 마네킹 공격 시험: "no slash trails, no glow ..."를 빼자
+# 같은 시드에서 큰 칼 궤적이 사라지고(효과량 895k → 184~432k) 휘두르는 동작은 그대로였다.
+CAMERA = "Locked-off static camera that stays perfectly still at the same angle and framing for the whole video. "
+# 배경은 처음부터 끝까지 마젠타 한 색: 영상 AI가 효과 장면에서 배경을 다른 색으로 바꾸거나 무늬를 그리면 크로마키로
+# 깨끗하게 오릴 수 없다. 바뀌는 건 시드가 정해서(2026-10-08 실험) 받자마자 검사해 새 시드로 다시 만든다(bg_retry).
 BG_MAGENTA = ("The background is one flat, uniform, solid magenta (#FF00FF) chroma-key color in every single frame, from "
-              "the first frame to the last: it never changes color, brightness or lighting, with no floor, no shadows "
-              "and no gradients. ")
-BG_GRAY = "The plain flat gray studio background stays completely unchanged, with no floor and no shadows. "
-LIGHT = ("The character is lit by neutral white light, with no pink or magenta light on the character. Keep the exact "
-         "character design, colors and art style. ")
-COMMON_TAIL = CAMERA + BG_MAGENTA + LIGHT + "No motion-blur trails, no visual effects, no text. Audio: quiet."
+              "the first frame to the last, the same pure magenta from edge to edge. ")
+BG_GRAY = "The plain flat gray studio background stays exactly the same in every frame. "
+LIGHT = ("The character is lit by soft neutral white light that keeps its original colors. Keep the exact character "
+         "design, colors and art style. ")
+COMMON_TAIL = CAMERA + BG_MAGENTA + LIGHT + "Audio: quiet."
 FX_TAIL = (CAMERA + BG_MAGENTA + LIGHT + "Make the magical visual effects of the motion vivid and sparkling (stars, "
-           "sparkles, glowing light trails, light bursts) in gold, white, cyan and blue only, never pink, magenta or "
-           "purple. The effects are drawn on top of the magenta background and never recolor, tint or light up the "
-           "background. No text. Audio: magical chimes.")
-NO_FX = " No visual effects: no slash trails, no light arcs, no glow, no particles."
+           "sparkles, glowing light trails, light bursts) in gold, white, cyan and blue. The effects float above the "
+           "pure magenta background. Audio: magical chimes.")
 
 # 이런 말이 들어간 동작은 빛 효과를 살려서 그리고, 나머지는 효과 없이 그린다.
 # ('지우기'는 흰 옷·금발처럼 밝은 캐릭터에 구멍을 낼 수 있어서 기본으로 쓰지 않는다)
@@ -124,7 +124,7 @@ def motion_prompt(kind, motion, deg, d, style="hd", effects=False, hold_end=Fals
     """텍스트 동작 설명 → H3 이미지→영상 프롬프트. motion은 한국어여도 된다 (H3 텍스트 인코더가 다국어).
     hold_end: 처음 자세로 돌아오지 않고 마지막 자세로 끝나는 동작 (쓰러짐 등)."""
     facing = FACING[d]
-    pixel = " Keep the crisp pixel-art look with large square pixels and no blur." if style == "pixel" else ""
+    pixel = " Keep the crisp, sharp pixel-art look with large square pixels." if style == "pixel" else ""
     if kind == "loop":
         body = (f"The character from <Picture 1> performs this motion in place, facing {facing}, as a steady, "
                 f"seamless loop: {motion}. The character keeps facing {facing} for the whole clip, never turns, and "
@@ -145,7 +145,7 @@ def reference_prompt(kind, deg, d, hint="", style="hd", effects=False):
     """레퍼런스 영상 → H3 레퍼런스 투 비디오 프롬프트."""
     facing = FACING[d]
     extra = f" Motion notes: {hint}." if hint else ""
-    pixel = " Keep the crisp pixel-art look with large square pixels and no blur." if style == "pixel" else ""
+    pixel = " Keep the crisp, sharp pixel-art look with large square pixels." if style == "pixel" else ""
     loop = ("as a steady, seamless loop" if kind == "loop"
             else "once, starting and ending in the character's pose from <Picture 1>")
     return (f"2D game sprite animation, seen from {camera_text(deg)}. The character from <Picture 1> performs exactly "
@@ -159,14 +159,14 @@ def follow_prompt(kind, deg, d, hint="", style="hd", effects=False):
     """마스터 방향 영상 → 다른 방향: 같은 캐릭터가 같은 동작을 같은 박자·같은 손으로, 방향만 바꿔서."""
     facing = FACING[d]
     extra = f" The motion is: {hint}." if hint else ""
-    pixel = " Keep the crisp pixel-art look with large square pixels and no blur." if style == "pixel" else ""
+    pixel = " Keep the crisp, sharp pixel-art look with large square pixels." if style == "pixel" else ""
     ending = ("as a steady, seamless loop" if kind == "loop"
               else "starting and ending in the pose from <Picture 1>")
     return (f"2D game sprite animation, seen from {camera_text(deg)}. The character from <Picture 1> performs exactly "
             f"the same motion as the character in <Video 1>: the same timing, the same body mechanics and the same "
             f"hand use (whatever is held stays in the same hand), {ending}. The only difference is the facing: here "
             f"the character faces {facing} the whole time, stays in place on the same spot at the same size, and does "
-            f"not move across the frame.{extra}{'' if effects else NO_FX}{pixel} {tail(effects)}")
+            f"not move across the frame.{extra}{pixel} {tail(effects)}")
 
 
 def mannequin_prompt(deg, d, hint="", style="hd", effects=False, gray=False):
@@ -174,10 +174,12 @@ def mannequin_prompt(deg, d, hint="", style="hd", effects=False, gray=False):
     (다르면 둘을 섞은 얼룩무늬 배경이 나온다). 기본은 둘 다 마젠타, gray면 예전처럼 둘 다 회색."""
     facing = FACING[d]
     extra = f" The motion is: {hint}." if hint else ""
-    pixel = " Keep the crisp pixel-art look with large square pixels and no blur." if style == "pixel" else ""
+    pixel = " Keep the crisp, sharp pixel-art look with large square pixels." if style == "pixel" else ""
+    # 마네킹은 무기를 들지 않는다(그리면 지팡이가 칼로 바뀜). 그래서 '빈손은 비워 둬'라고 하면 캐릭터 무기까지 치우게 된다
+    # → 든 물건은 첫 프레임 그대로 같은 손에, 그 손과 함께 움직인다고만 적는다.
     return (f"2D game sprite animation, seen from {camera_text(deg)}. The character from <Picture 1> performs exactly "
-            f"the same motion as the gray mannequin in <Video 1>: the same body pose at every moment, the same timing, "
-            f"the same facing and the same camera angle. The character faces {facing}. Anything the mannequin holds "
-            f"stays in the same hand; an empty mannequin hand stays empty. The character stays on the same spot at the "
-            f"same size. Only the motion comes from <Video 1>; the look, outfit, proportions and art style come from "
-            f"<Picture 1>.{extra}{'' if effects else NO_FX}{pixel} {tail(effects, gray=gray)}")
+            f"the same motion as the mannequin in <Video 1>: the same body pose at every moment, the same timing, "
+            f"the same facing and the same camera angle. The character faces {facing}. The character keeps holding "
+            f"whatever it holds in <Picture 1> in the same hand, and the held item moves together with that hand. The "
+            f"character stays on the same spot at the same size. Only the motion comes from <Video 1>; the look, "
+            f"outfit, proportions and art style come from <Picture 1>.{extra}{pixel} {tail(effects, gray=gray)}")

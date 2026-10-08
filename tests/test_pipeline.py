@@ -1,4 +1,5 @@
 """파이프라인 도우미: 영상 길이, 걷기 판단, 시드 바꾸기, 배경 검사, 마네킹 키프레임 줄이기, 프롬프트 배경 지시."""
+import json
 import unittest
 
 from helpers import TempDir, walk_frame, write_frames
@@ -46,6 +47,29 @@ class PipelineHelpersTest(unittest.TestCase):
             self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x", turbo=False)), 20)
             project.load_config = lambda: {"turbo_steps": 8}
             self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x")), 8)
+        finally:
+            project.load_config = saved
+
+    def test_add_negative_node(self):
+        """'빼는 낱말' 노드는 가이드까지 붙은 조건과 모델을 받아 BasicGuider로 넘긴다. 0이면 안 끼운다."""
+        from spritegen import project
+        saved = project.load_config
+        try:
+            project.load_config = lambda: {}
+            wf = comfy.r2v_workflow("a.png", "m.mp4", "p", 640, 640, 73, 1, "x", turbo=True, guides=[("a.png", 0)])
+            cond, model = wf["s_guider"]["inputs"]["conditioning"], wf["s_guider"]["inputs"]["model"]
+            wf = comfy.add_negative(json.loads(json.dumps(wf)))
+            n = wf["s_neg"]
+            self.assertEqual(n["class_type"], comfy.NEG_NODE)
+            self.assertEqual((n["inputs"]["conditioning"], n["inputs"]["model"]), (cond, model))
+            self.assertEqual(n["inputs"]["clip"], ["m_clip", 0])
+            self.assertEqual(n["inputs"]["weight"], 1.5)
+            self.assertIn("slash trail", n["inputs"]["negative"])
+            self.assertEqual(wf["s_guider"]["inputs"], {"model": ["s_neg", 0], "conditioning": ["s_neg", 1]})
+            self.assertEqual(pl._reseed(wf)["s_neg"], wf["s_neg"])          # 새 시드로 다시 만들 때도 그대로
+            project.load_config = lambda: {"negative_weight": 0}
+            plain = comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x")
+            self.assertNotIn("s_neg", comfy.add_negative(json.loads(json.dumps(plain))))
         finally:
             project.load_config = saved
 
@@ -134,6 +158,27 @@ class PipelineHelpersTest(unittest.TestCase):
         self.assertNotIn("magenta", prompts.tail(False, gray=True).split("character is lit")[0])
         m = prompts.mannequin_prompt(45, "S", "slash")
         self.assertIn("every single frame", m)                   # 마네킹 모드도 기본은 마젠타
+
+    def test_video_prompts_name_no_unwanted_things(self):
+        """H3에는 원하지 않는 것을 이름으로 적지 않는다 (적으면 그 낱말이 내용으로 읽혀 오히려 궤적·빛이 생겼다).
+        빛 효과를 살리는 동작(vivid)만 효과를 적는다."""
+        texts = [prompts.tail(False), prompts.tail(False, gray=True),
+                 prompts.motion_prompt("loop", "걷기", 45, "S"), prompts.motion_prompt("oneshot", "베기", 45, "E", "pixel"),
+                 prompts.mannequin_prompt(45, "E", "베기"), prompts.reference_prompt("loop", 45, "S"),
+                 prompts.follow_prompt("oneshot", 45, "SE")]
+        for t in texts:
+            low = t.lower()
+            for word in ("trail", "glow", "particle", "sparkle", "effect", "shadow", "no blur", "no text", "no zoom"):
+                self.assertNotIn(word, low, (word, t[:80]))
+        self.assertNotIn("empty", prompts.mannequin_prompt(45, "E").lower())   # 마네킹 손이 비어도 캐릭터 무기는 그대로
+        self.assertIn("sparkling", prompts.tail(True))
+
+    def test_negative_node_file(self):
+        """ComfyUI에 복사해 쓰는 노드 파일: 문법이 맞고, 앱이 찾는 노드 이름을 내보낸다 (torch 없이 문법만 본다)."""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "comfyui_nodes" / "sprite_neg_h3" / "__init__.py").read_text(encoding="utf-8")
+        compile(src, "sprite_neg_h3/__init__.py", "exec")
+        self.assertIn(f'"{comfy.NEG_NODE}": SpriteNegativeH3', src.replace("NODE_CLASS_MAPPINGS = {", ""))
 
 
 if __name__ == "__main__":

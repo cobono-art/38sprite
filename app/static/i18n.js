@@ -127,6 +127,8 @@ const EN = {
   "더 좋게 (선택, 앱 폴더에서 한 번 실행): setup_pose.bat — 영상 → 3D 뼈대":
     "Better results (optional, run once in the app folder): setup_pose.bat — video → 3D skeleton",
   "setup_pose.bat — 영상 → 3D 뼈대": "setup_pose.bat — video → 3D skeleton",
+  "setup_matting.bat — AI 배경 지우기": "setup_matting.bat — AI matting",
+  "setup_negative.bat — 빛 궤적 빼기 (ComfyUI 다시 켜기)": "setup_negative.bat — remove light trails (restart ComfyUI)",
   // 진행 · 확인 · 실패
   "중지": "Stop", "준비 중": "Preparing", "키프레임 짜는 중": "Writing keyframes", "3D 마네킹 미리보기": "3D mannequin preview",
   "마네킹 확인을 기다려요": "Waiting for mannequin review", "마스터 확인을 기다려요": "Waiting for master review",
@@ -190,6 +192,8 @@ const EN_RULES = [
     (_, a, d, q, f) => `${a} ${d} · ${EN[q]}${f ? ` (frame ${f.split("·").join(", ")})` : ""}`],
   [/^(\S+) ([NSEW]{1,2}) (대기|생성 중|완료|확인 중|실패)( \d\d:\d\d)?$/, (_, a, d, s, t) => `${a} ${d} ${PART_STATE[s]}${t || ""}`],
   [/^요청이 실패했어요 \((\d+)\)$/, "Request failed ($1)"],
+  [/^더 좋게 \(선택, 앱 폴더에서 한 번 실행\): (.*)$/, (_, t) =>
+    `Better results (optional, run once in the app folder): ${t.split(" · ").map(x => trKey(x) ?? x).join(" · ")}`],
   [/^방향 그림 (\d+)장$/, "$1 drawing(s)"], [/^동작 (\d+)개$/, "$1 motion(s)"],
   [/^영상 AI로 만들 방향 (\d+)개 \((.*)\)$/, "Video AI makes $1 directions ($2)"], [/^반전으로 채울 방향 (\d+)개$/, "$1 mirrored"],
   [/^(\d+)방향\(왼쪽은 반전\)$/, "$1 directions (left mirrored)"], [/^픽셀아트 (\d+)px$/, "Pixel art $1px"],
