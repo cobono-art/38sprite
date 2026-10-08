@@ -245,8 +245,8 @@ def light_alpha(frame, bg, lo=50.0, hi=150.0, lo2=45.0, hi2=100.0):
     """빛 효과의 알파 (배경색이 마젠타·초록이 아닐 때): 넓고 부드럽게, 둘 중 큰 것.
     - 배경보다 밝아진 만큼 (가장 많이 밝아진 색 채널 기준): 빛은 더해지는 것이라 반짝이·광선·고리가 산다.
     - 배경과 색이 확실히 다른 만큼 (lo2 넘게): 분홍 배경 위 보라 고리, 연회색 배경 위 청록 고리처럼 밝기는 비슷해도
-      색이 다른 효과. 배경보다 어두울수록 약하게 본다 (효과 둘레의 칙칙한 번짐, 바닥 그림자).
-    효과 둘레의 옅은 번짐(배경과 조금 다른 색)은 남기지 않는다."""
+      색이 다른 효과. 배경보다 어두울수록 약하게 본다 (효과 둘레의 칙칙한 번짐).
+    효과 둘레의 옅은 번짐(배경과 조금 다른 색)과, 배경과 같은 색인데 더 어두운 곳(바닥 그림자)은 남기지 않는다."""
     f = frame.astype(np.float32)
     b = np.asarray(bg, np.float32)
     w = np.array([0.299, 0.587, 0.114], np.float32)
@@ -254,6 +254,8 @@ def light_alpha(frame, bg, lo=50.0, hi=150.0, lo2=45.0, hi2=100.0):
     diff = np.clip((np.linalg.norm(f - b, axis=2) - lo2) / (hi2 - lo2), 0, 1)
     darker = float(b @ w) - f @ w                     # 배경보다 얼마나 어두운지
     diff *= np.clip(1 - (darker - 10) / 40, 0, 1)
+    cos = (f * b).sum(axis=2) / (np.linalg.norm(f, axis=2) * np.linalg.norm(b) + 1e-6)
+    diff[(cos > 0.97) & (darker > 6)] = 0             # 배경색 그대로 어두워진 곳 = 그림자
     return cv2.GaussianBlur(np.maximum(up, diff), (0, 0), 0.8)
 
 

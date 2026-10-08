@@ -12,17 +12,21 @@ CONFIG = ROOT / "config.json"
 _lock = threading.RLock()
 
 DEFAULT_SETTINGS = {"angle": 45, "count": 8, "mirror": True, "style": "hd", "pixel_height": 64}
-DEFAULT_CONFIG = {"comfy_url": "http://127.0.0.1:8189", "port": 7870}
+DEFAULT_CONFIG = {"comfy_url": "http://127.0.0.1:8188", "port": 7870}   # 8188 = ComfyUI 기본 포트
 
 
 def now():
     return time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def user_config():
+    """config.json에 사용자가 적은 값만 (기본값 빼고)."""
+    return json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
+
+
 def load_config():
     cfg = dict(DEFAULT_CONFIG)
-    if CONFIG.exists():
-        cfg.update(json.loads(CONFIG.read_text(encoding="utf-8")))
+    cfg.update(user_config())
     return cfg
 
 

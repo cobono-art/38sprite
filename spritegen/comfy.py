@@ -70,6 +70,30 @@ def http_json(url, payload=None, timeout=60):
     return json.loads(body) if body.strip() else {}   # /queue 삭제, /interrupt는 빈 응답을 준다
 
 
+CANDIDATES = ("http://127.0.0.1:8188", "http://127.0.0.1:8189", "http://127.0.0.1:8000")
+
+
+def find_server(candidates=CANDIDATES):
+    """켜져 있는 ComfyUI 찾기: H3 이미지→영상 모델 파일까지 있는 곳을 먼저, 없으면 처음 응답한 곳, 아무도 없으면 None.
+    (ComfyUI 기본 포트는 8188이지만, 여러 개를 켜 두면 H3가 있는 쪽이 다른 포트일 수 있다. 최신 ComfyUI는 모델이
+    없어도 H3 노드가 있어서 노드만 보면 엉뚱한 쪽을 고른다 — 2026-10-08 시험)"""
+    _, M, _ = settings()
+    first = None
+    for url in candidates:
+        try:
+            http_json(f"{url}/system_stats", timeout=2)
+        except (urllib.error.URLError, OSError, ValueError):
+            continue
+        first = first or url
+        try:
+            unets = http_json(f"{url}/object_info/UNETLoader", timeout=10)["UNETLoader"]["input"]["required"]["unet_name"][0]
+            if M["i2v"] in unets:
+                return url
+        except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError, TypeError):
+            pass
+    return first
+
+
 def check(server):
     """ComfyUI가 켜져 있고 고른 영상 AI를 쓸 수 있는지 확인한다."""
     backend, M, wdir = settings()

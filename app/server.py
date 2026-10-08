@@ -576,6 +576,13 @@ def main():
     ap.add_argument("--port", type=int, default=None)
     ap.add_argument("--open", action="store_true", help="브라우저 열기")
     args = ap.parse_args()
+    user = store.user_config()
+    if "comfy_url" not in user:                      # 처음 켤 때: 켜져 있는 ComfyUI를 찾아 기억한다 (H3가 있는 쪽 먼저)
+        found = comfy.find_server()
+        if found:
+            user["comfy_url"] = found
+            store.save_config(user)
+            print(f"ComfyUI를 찾았어요: {found} (config.json에 적어 둠)", flush=True)
     cfg = store.load_config()
     port = args.port or cfg.get("port", 7870)
     store.PROJECTS.mkdir(exist_ok=True)

@@ -1,0 +1,29 @@
+# 올릴 때마다 자동 테스트: 윈도우·리눅스에서 파이썬 테스트(tests/)와 화면 자바스크립트 문법 검사.
+# 영상 AI·Codex·AI 배경 지우기 모델 없이 도는 테스트만 있다 (가짜 프레임으로 시트 조립·내보내기·서버를 시험).
+name: tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+      - name: 파이썬 테스트
+        run: python -m unittest discover -s tests -v
+      - name: 자바스크립트 문법
+        run: |
+          node --check app/static/app.js
+          node --check app/static/i18n.js
