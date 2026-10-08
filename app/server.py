@@ -19,7 +19,7 @@ from aiohttp import web
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from spritegen import codex, comfy, export, matting  # noqa: E402
+from spritegen import __version__, codex, comfy, export, matting  # noqa: E402
 from spritegen import project as store  # noqa: E402
 from spritegen.assemble import retime  # noqa: E402
 from spritegen.directions import NAME_KO, SHEET_ORDER, generated_directions, preview_layout, source_of  # noqa: E402
@@ -101,7 +101,8 @@ async def status(_):
     comfy_info, codex_info = await asyncio.gather(blocking(comfy.check, cfg["comfy_url"]), blocking(codex.check))
     return web.json_response({"config": cfg, "comfy": comfy_info, "codex": codex_info,
                               "presets": ANGLE_PRESETS, "dir_names": NAME_KO, "effect_words": EFFECT_WORDS,
-                              "pose": pose_tools() is not None, "matting": matting.enabled()})
+                              "pose": pose_tools() is not None, "matting": matting.enabled(),
+                              "version": __version__})
 
 
 @routes.post("/api/config")

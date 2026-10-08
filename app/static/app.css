@@ -242,3 +242,5 @@ dialog h2 { font-size: 16px; }
 .fr-thumb.qa-flag { border-color: var(--warn); }
 .fr-thumb.qa-flag .fr-badge { color: var(--warn); }
 .line-label.wide { width: auto; }
+
+.version{margin-left:6px;opacity:.7}

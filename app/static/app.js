@@ -94,6 +94,7 @@ async function loadStatus() {
   try {
     const st = await api("/api/status");
     state.status = st;
+    if (st.version) $("#app-version").textContent = `v${st.version}`;
     const c = st.comfy;
     setChip($("#st-comfy"), c.ok, c.ok ? (c.r2v ? "영상 AI 연결됨" : "영상 AI 연결됨 · 영상 따라 하기 없음") : "영상 AI 연결 안 됨",
       c.error || `${c.url} · ComfyUI ${c.version || ""}`);
