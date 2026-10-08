@@ -9,7 +9,7 @@ The name means **3-view → 8 directions**.
 
 ![38Sprite promo highlight](docs/promo_highlight.webp)
 
-https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
+https://github.com/user-attachments/assets/38e45399-a1d9-4126-8a3f-20a381fb4540
 
 Every character animation in the video was made with 38Sprite.
 
