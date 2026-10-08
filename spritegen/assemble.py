@@ -123,6 +123,7 @@ def analyze_direction(frames_dir, kind, n_frames, strip_effects=False, window=No
         start = rep.get("loop_start", 0) + rep.get("lag_frames", 0)
         span = [alphas[i] for i in range(max(0, start), min(len(alphas), start + rep["period_frames"]))]
         rep["step_px"] = step_length(span)
+        rep["stance_dx"] = stance_dx(span + span[:1])
     cx = [float(np.average(np.arange(a.shape[1]), weights=a.sum(axis=0) + 1e-6)) for a in alphas]
     rep["picked"] = picks
     # 첫 프레임과 배경색이 크게 다른 프레임 (영상 AI가 효과 장면에서 배경을 다른 색으로 바꾼 것)
@@ -162,10 +163,52 @@ def step_length(alphas):
     return round(float(max(widths) - min(widths)), 1) if len(widths) >= 4 else None
 
 
+def stance_dx(alphas, min_run=3):
+    """제자리 반복 동작에서 디딘 발이 몸에 대해 옆으로 가는 속도 (영상 px/장, 양수) 또는 None.
+    장마다 땅에 닿은 점(실루엣 맨 아래 4줄의 가운데 x)을 따라가면, 같은 발을 딛는 동안은 뒤로 가고 발을 바꿀 때 앞으로
+    튄다. 더 많은 장이 가는 쪽을 디딘 구간으로 보고, min_run장 넘게 이어진 구간들의 기울기를 함께 맞춘다 — 게임에서 이
+    속도로 움직이면 디딘 발이 바닥에서 가장 덜 미끄러진다. AI 영상은 디딘 발도 빨라졌다 느려졌다 해서 하나로 딱 맞지는
+    않는다 (2026-10-09: 예전 '발 벌림 폭' 방식은 걷기 옆모습에서 약 25% 빠르게 잡았다)."""
+    xs = []
+    for a in alphas:
+        solid = a > 0.5
+        rows = np.where(solid.any(axis=1))[0]
+        if len(rows) < 10:
+            return None
+        bot = rows[-1]
+        xs.append(float(np.where(solid[max(0, bot - 3):bot + 1].any(axis=0))[0].mean()))
+    xs = np.array(xs)
+    d = np.diff(xs)
+    sign = -1 if (d < -0.5).sum() >= (d > 0.5).sum() else 1
+    moving = sign * d > 0.5
+    if moving.sum() < 0.25 * len(d):
+        return None
+    slopes, weights, i = [], [], 0
+    while i < len(d):
+        if not moving[i]:
+            i += 1
+            continue
+        j = i
+        while j < len(d) and moving[j]:
+            j += 1
+        if j - i >= min_run:
+            seg = xs[i:j + 1]
+            slopes.append(abs(np.polyfit(np.arange(len(seg)), seg, 1)[0]))
+            weights.append(j - i)
+        i = j
+    return round(float(np.average(slopes, weights=weights)), 2) if slopes else None
+
+
 DIR_ANGLE = {"E": 0, "SE": 45, "S": 90, "SW": 135, "W": 180, "NW": 225, "N": 270, "NE": 315}
 
 
-def game_info(done, order, kind, fps, scale, hold_end=False, locomotion=False, ground_y=0.5):
+def move_velocity(v, order, ground_y):
+    """이동 속도 v(시트 px/초) → 방향별 [x, y] px/초 (y는 화면 아래가 +, 땅을 내려다보는 만큼 ground_y배)."""
+    return {d: [round(v * np.cos(np.radians(DIR_ANGLE[d])), 1) or 0.0,
+                round(v * np.sin(np.radians(DIR_ANGLE[d])) * ground_y, 1) or 0.0] for d in order if d in DIR_ANGLE}
+
+
+def game_info(done, order, kind, fps, scale, hold_end=False, locomotion=False, ground_y=0.5, move_scale=1.0):
     """게임에서 쓰는 정보 (시트 JSON에 같이 쓴다).
     - frame_ms: 한 칸 보여 줄 시간
     - 한 번 동작: hit_frame(가장 크게 움직인 칸, 공격이면 맞는 순간)과 방향별 hit_frames, hold_last(쓰러짐처럼 끝 칸에서 멈춤)
@@ -186,17 +229,39 @@ def game_info(done, order, kind, fps, scale, hold_end=False, locomotion=False, g
             info["hit_frames"] = hits
         info["hold_last"] = bool(hold_end)
     elif locomotion:
-        side = next((d for d in ("E", "W", "SE", "NE") if d in done and done[d]["report"].get("step_px")), None)
+        side = next((d for d in ("E", "W", "SE", "NE", "SW", "NW") if d in done
+                     and (done[d]["report"].get("stance_dx") or done[d]["report"].get("step_px"))), None)
         if side:
             rep = done[side]["report"]
             period_sec = rep["period_frames"] / FPS
-            v = 2 * rep["step_px"] * scale / period_sec
+            old = 2 * rep["step_px"] * scale / period_sec if rep.get("step_px") else None
+            v = old
+            if rep.get("stance_dx"):                 # 디딘 발 기울기 (대각선이면 옆 성분이라 cos로 나눈다)
+                new = rep["stance_dx"] * FPS * scale / max(0.5, abs(np.cos(np.radians(DIR_ANGLE[side]))))
+                v = new if old is None or 0.5 <= new / old <= 2 else old
+            info["move_speed_auto"] = round(v, 1)
+            v *= move_scale
             info["move_speed"] = round(v, 1)
-            info["velocity"] = {d: [round(v * np.cos(np.radians(DIR_ANGLE[d])), 1) or 0.0,
-                                    round(v * np.sin(np.radians(DIR_ANGLE[d])) * ground_y, 1) or 0.0]
-                                for d in order if d in DIR_ANGLE}
+            info["move_scale"] = round(move_scale, 3)
+            info["velocity"] = move_velocity(v, order, ground_y)
             info["ground_y"] = round(ground_y, 3)
     return info
+
+
+def set_move_scale(out_dir, scale):
+    """후처리: 사용자가 '게임처럼 걸어 보기'에서 맞춘 이동 속도 배율을 시트 JSON에 쓴다 (그림은 그대로)."""
+    out_dir = Path(out_dir)
+    for res in GIF_STYLE:
+        meta_path = out_dir / f"sheet_{res}.json"
+        if not meta_path.exists():
+            continue
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if "move_speed_auto" not in meta:
+            continue
+        v = meta["move_speed_auto"] * scale
+        meta.update(move_speed=round(v, 1), move_scale=round(scale, 3),
+                    velocity=move_velocity(v, meta["order"], meta.get("ground_y", 0.5)))
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def matte_picks(frames_dir, frames, alphas, bgs, picks, effects):
@@ -269,6 +334,8 @@ def retime(out_dir, count, fps):
             meta["frame_ms"] = round(1000 / fps, 1)
         if "move_speed" in meta:                     # 걸음이 빨라지면 발이 미끄러지지 않게 이동도 빨리
             meta["move_speed"] = round(meta["move_speed"] * k, 1)
+            if "move_speed_auto" in meta:
+                meta["move_speed_auto"] = round(meta["move_speed_auto"] * k, 1)
             meta["velocity"] = {d: [round(x * k, 1), round(y * k, 1)] for d, (x, y) in meta["velocity"].items()}
         sheet = np.asarray(Image.open(out_dir / meta["image"]).convert("RGBA"))
         rows = {d: [np.ascontiguousarray(sheet[r["y"]:r["y"] + r["h"], r["x"]:r["x"] + r["w"]]) for r in rects]
@@ -298,7 +365,7 @@ def layout_frames(rows, count, gap=8):
 def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8, hd_height=256,
              pixel_height=0, colors=20, smooth=24, palette_refs=None, strip_effects=False,
              window=None, window_from=None, char_px=None, hd_char=200, overrides=None, loop_from=None, hold_end=False,
-             effects="none", loop_span=None, matting=False, locomotion=False, ground_y=0.5):
+             effects="none", loop_span=None, matting=False, locomotion=False, ground_y=0.5, move_scale=1.0):
     """dir_folders: {만든 방향: 그 방향 PNG 프레임 폴더}. 시트·GIF·report.json을 out_dir에 쓴다.
     한 번 하는 동작에서 window(시작, 끝, 타격 프레임)나 window_from(기준 방향)을 주면 모든 방향을 같은 구간으로 자른다.
     반복 동작에서 loop_from(기준 방향)을 주면 그 방향에서 찾은 반복 구간을 모든 방향에 똑같이 쓴다
@@ -366,7 +433,7 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
                     for im in r[d]] for d in order}
     hd = scaled(rows)
     meta = write_sheet(hd, order, fps, (pivot[0] * s, pivot[1] * s), out_dir, "sheet_hd", loop,
-                       game_info(done, order, kind, fps, s, hold_end, locomotion, ground_y))
+                       game_info(done, order, kind, fps, s, hold_end, locomotion, ground_y, move_scale))
     write_gifs(hd, order, count, fps, out_dir, "hd")
     for old in out_dir.glob("sheet_hd_*.png"):         # 예전 층 시트 (이번에 층이 없으면 지운다)
         old.unlink()
@@ -389,7 +456,7 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
         px, _ = pixelate(flat, max(1, round((y1 - y0) * ps)), colors, palette_ref=palette_refs, smooth=smooth, seq_len=n)
         prow = {d: px[k * n:(k + 1) * n] for k, d in enumerate(order)}
         write_sheet(prow, order, fps, (pivot[0] * ps, pivot[1] * ps), out_dir, "sheet_px", loop,
-                    game_info(done, order, kind, fps, ps, hold_end, locomotion, ground_y))
+                    game_info(done, order, kind, fps, ps, hold_end, locomotion, ground_y, move_scale))
         write_gifs(prow, order, count, fps, out_dir, "px")
 
     report = {"kind": kind, "count": count, "order": order, "frames": n, "sprite_fps": round(fps, 2),

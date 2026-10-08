@@ -129,6 +129,11 @@ const EN = {
   "setup_pose.bat — 영상 → 3D 뼈대": "setup_pose.bat — video → 3D skeleton",
   "setup_matting.bat — AI 배경 지우기": "setup_matting.bat — AI matting",
   "빛 궤적 빼기 켜기": "Turn on trail removal",
+  "게임처럼 걸어 보기": "Walk like in a game", "이동 속도": "Move speed",
+  "이동 속도 (자동으로 잰 속도의 몇 배)": "Move speed (× the measured speed)",
+  "바닥 점이 디딘 발과 같이 움직이면 발이 미끄러지지 않는 속도예요": "If the floor dots move with the planted foot, the feet don't slide at this speed",
+  "저장했어요. 받는 시트 JSON·ZIP의 이동 속도(move_speed·velocity)가 이 값이에요.": "Saved. Downloaded sheet JSON and ZIP use this move speed (move_speed, velocity).",
+  "이동 속도가 올바르지 않아요": "Invalid move speed", "다 만든 동작만 이동 속도를 바꿀 수 있어요": "Only finished motions can change move speed",
   "이 PC의 ComfyUI가 아니라서 다시 켤 수 없어요": "That ComfyUI is not on this PC, so it can't be restarted",
   "켜져 있는 ComfyUI를 찾지 못했어요": "Couldn't find the running ComfyUI", "다시 켜는 중… (1분쯤)": "Restarting… (about 1 min)",
   "빛 궤적 빼기 노드가 깔려 있지만 ComfyUI가 추가 노드를 끈 채로 켜져 있어요. 같은 설정에 이 노드만 허용해서 다시 켜요.":
@@ -199,6 +204,7 @@ const EN_RULES = [
     (_, a, d, q, f) => `${a} ${d} · ${EN[q]}${f ? ` (frame ${f.split("·").join(", ")})` : ""}`],
   [/^(\S+) ([NSEW]{1,2}) (대기|생성 중|완료|확인 중|실패)( \d\d:\d\d)?$/, (_, a, d, s, t) => `${a} ${d} ${PART_STATE[s]}${t || ""}`],
   [/^요청이 실패했어요 \((\d+)\)$/, "Request failed ($1)"],
+  [/^초당 (\d+)px · ([\d.]+)배$/, "$1 px/s · $2×"],
   [/^더 좋게 \(선택, 앱 폴더에서 한 번 실행\): (.*)$/, (_, t) =>
     `Better results (optional, run once in the app folder): ${t.split(" · ").map(x => trKey(x) ?? x).join(" · ")}`],
   [/^방향 그림 (\d+)장$/, "$1 drawing(s)"], [/^동작 (\d+)개$/, "$1 motion(s)"],

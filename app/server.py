@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 from spritegen import __version__, codex, comfy, export, matting  # noqa: E402
 from spritegen import comfy_launch  # noqa: E402
 from spritegen import project as store  # noqa: E402
-from spritegen.assemble import retime  # noqa: E402
+from spritegen.assemble import retime, set_move_scale  # noqa: E402
 from spritegen.directions import NAME_KO, SHEET_ORDER, generated_directions, preview_layout, source_of  # noqa: E402
 from spritegen.pipeline import (JOBS, MOTION_SET, assemble_motion, cancel, default_seconds, pose_tools,  # noqa: E402
                                 start_keyframes, start_motion, start_redraw, start_sheet, swap_version,
@@ -450,6 +450,24 @@ async def set_speed(request):
     await blocking(retime, store.project_dir(pid) / m["result"]["dir"], m["settings"]["count"], fps)
     store.update(pid, lambda pr: next(x for x in pr["motions"] if x["id"] == mid).update(play_fps=round(fps, 2)))
     return web.json_response({"fps": round(fps, 2)})
+
+
+@routes.post("/api/projects/{pid}/motions/{mid}/move_scale")
+async def set_move(request):
+    """후처리: '게임처럼 걸어 보기'에서 맞춘 이동 속도 배율 (자동으로 잰 속도의 몇 배) — 시트 JSON의 move_speed·velocity만."""
+    pid, mid = request.match_info["pid"], request.match_info["mid"]
+    try:
+        scale = float((await request.json()).get("scale", 0))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return bad("이동 속도가 올바르지 않아요")
+    if not 0.3 <= scale <= 3:
+        return bad("이동 속도가 올바르지 않아요")
+    m = _done_motion(pid, mid)
+    if not m:
+        return bad("다 만든 동작만 이동 속도를 바꿀 수 있어요")
+    await blocking(set_move_scale, store.project_dir(pid) / m["result"]["dir"], scale)
+    store.update(pid, lambda pr: next(x for x in pr["motions"] if x["id"] == mid).update(move_scale=round(scale, 3)))
+    return web.json_response({"scale": round(scale, 3)})
 
 
 def _done_motion(pid, mid):

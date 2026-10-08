@@ -853,7 +853,7 @@ def assemble_motion(pid, mid, extra=None):
                       window=window, window_from=master if oneshot and m.get("mode") == "master" else None,
                       char_px=char_h * FRAME_SIZE[1], overrides=m.get("frame_overrides"),
                       hold_end=oneshot and m.get("hold_end", False), effects=effects_of(m), loop_span=span,
-                      matting=matting.enabled(), locomotion=is_locomotion(m),
+                      matting=matting.enabled(), locomotion=is_locomotion(m), move_scale=float(m.get("move_scale") or 1.0),
                       ground_y=max(0.25, float(np.sin(np.radians(mannequin_elevation(s["angle"]))))),
                       loop_from=("S" if "S" in gen else master)        # 박자 기준은 정면 (옆모습은 실루엣 신호가 달라 어긋남을 못 잰다)
                       if not oneshot and (m.get("source") == "video" or m.get("mode") in ("mannequin", "master")) else None)

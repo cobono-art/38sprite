@@ -825,7 +825,10 @@ class SpritePlayer {
     this.view = "all";
     this.dir = count === 2 ? "E" : "S";
     this.acc = 0;
+    this.time = 0;
     this.shown = -1;
+    this.ground = false;                              // 게임처럼 걸어 보기: 바닥 점을 이동 속도의 반대로 흘린다
+    this.moveRatio = 1;                               // 저장된 이동 속도에 곱할 값 (슬라이더로 맞추는 중)
     this.ro = new ResizeObserver(() => this.fit());
     this.ro.observe(stage);
   }
@@ -878,6 +881,7 @@ class SpritePlayer {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const blit = (d, x, y) => {
       const r = meta.directions[d] && meta.directions[d][f];
+      if (this.ground && meta.velocity && meta.velocity[d]) this.drawGround(d, x, y);
       if (r) ctx.drawImage(img, r.x, r.y, r.w, r.h, x, y, r.w, r.h);
     };
     if (this.view === "all") {
@@ -887,11 +891,33 @@ class SpritePlayer {
     } else blit(this.dir, 0, 0);
   }
 
+  /* 바닥 점: 캐릭터가 이 방향으로 이동 속도만큼 간다면 바닥은 반대로 흘러간다 (세로는 땅을 내려다보는 만큼 좁게) */
+  drawGround(d, x0, y0) {
+    const { ctx, meta } = this;
+    const k = this.moveRatio * (meta.fps / (this.baseFps || meta.fps));   // 재생 속도를 바꾸면 걸음도 빨라진다
+    const [vx, vy] = meta.velocity[d].map(v => v * k);
+    const gy = meta.ground_y || 0.5;
+    const sx = Math.max(6, Math.round(meta.frame_w / 8)), sy = Math.max(4, Math.round(sx * gy));
+    const ox = ((-vx * this.time) % sx + sx) % sx, oy = ((-vy * this.time) % sy + sy) % sy;
+    const dot = this.pixel ? 1 : 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, meta.frame_w, meta.frame_h);
+    ctx.clip();
+    ctx.fillStyle = this.stage.classList.contains("light") || this.stage.classList.contains("checker")
+      ? "rgba(40,44,52,.35)" : "rgba(255,255,255,.28)";
+    for (let y = y0 + oy - sy; y < y0 + meta.frame_h; y += sy) {
+      for (let x = x0 + ox - sx; x < x0 + meta.frame_w; x += sx) ctx.fillRect(Math.round(x), Math.round(y), dot, dot);
+    }
+    ctx.restore();
+  }
+
   tick(dt) {
     if (!this.meta) return;
     this.acc += dt * this.meta.fps;
+    this.time += dt;
     const f = Math.floor(this.acc) % this.n;
-    if (f !== this.shown) { this.draw(f); this.shown = f; }
+    if (f !== this.shown || this.ground) { this.draw(f); this.shown = f; }
   }
 }
 
@@ -915,7 +941,7 @@ function buildPlayer(view, p, m) {
     updateExports(p, m, res);
     const v = encodeURIComponent(m.result.finished || "");   // 장면을 바꾸면 시트가 새로 만들어진다
     player.load(fileUrl(p.id, `${base}/sheet_${res}.json?v=${v}`), fileUrl(p.id, `${base}/sheet_${res}.png?v=${v}`), res === "px")
-      .then(() => { player.meta.fps = fps; frames.render(); })
+      .then(() => { player.baseFps = player.meta.fps; player.meta.fps = fps; frames.render(); player.onLoad && player.onLoad(); })
       .catch(e => { errBox.textContent = e.message; errBox.hidden = false; });
   };
 
@@ -1001,6 +1027,7 @@ function buildPlayer(view, p, m) {
   segHandler(bgSeg, "bg", applyBg);
 
   setupSpeed(frag, p, m, player, origFps, fps, v => { fps = v; });
+  setupMove(frag, p, m, player);
 
   const gen = generatedFor(s.count, s.mirror);
   const all = dirsFor(s.count).length;
@@ -1131,6 +1158,43 @@ function setupFrames(frag, p, m, player) {
 }
 
 /* 재생 속도(후처리): 그림은 그대로, 넘기는 속도만 바꾼다. 손을 떼면 시트 JSON·GIF·ZIP에 저장한다. */
+/* 게임처럼 걸어 보기 (걷기·달리기): 바닥 점을 이동 속도로 흘려서 발이 미끄러지는지 보고, 슬라이더로 맞춰 저장한다.
+   자동으로 잰 속도(디딘 발이 뒤로 가는 기울기)의 0.5~1.5배. 저장하면 시트 JSON의 move_speed·velocity가 바뀐다. */
+function setupMove(frag, p, m, player) {
+  const box = $(".sv-move", frag), on = $(".sv-move-on", frag), slider = $(".sv-move-scale", frag);
+  const val = $(".sv-move-val", frag), msg = $(".sv-move-msg", frag);
+  const init = () => {
+    const meta = player.meta;
+    box.hidden = !(meta && meta.move_speed_auto);
+    if (box.hidden) return;
+    slider.value = String(meta.move_scale || 1);
+    show();
+  };
+  const show = () => {
+    const meta = player.meta, k = +slider.value;
+    player.moveRatio = k / (meta.move_scale || 1);
+    val.textContent = `초당 ${Math.round(meta.move_speed_auto * k * (meta.fps / (player.baseFps || meta.fps)))}px · ${k.toFixed(2)}배`;
+  };
+  player.onLoad = init;
+  on.addEventListener("change", () => {
+    player.ground = on.checked;
+    if (on.checked && player.view === "all") $('.sv-view button[data-view="one"]', box.closest(".stage-side"))?.click();
+  });
+  slider.addEventListener("input", show);
+  slider.addEventListener("change", async () => {
+    msg.textContent = "저장 중…";
+    try {
+      const r = await postJSON(`/api/projects/${p.id}/motions/${m.id}/move_scale`, { scale: +slider.value });
+      const meta = player.meta, old = meta.move_scale || 1;
+      meta.velocity = Object.fromEntries(Object.entries(meta.velocity).map(([d, v]) => [d, v.map(x => x * r.scale / old)]));
+      meta.move_scale = r.scale;
+      player.moveRatio = 1;
+      m.move_scale = r.scale;
+      msg.textContent = "저장했어요. 받는 시트 JSON·ZIP의 이동 속도(move_speed·velocity)가 이 값이에요.";
+    } catch (e) { msg.textContent = e.message; }
+  });
+}
+
 function setupSpeed(frag, p, m, player, origFps, fps, onChange) {
   const slider = $(".sv-speed", frag), val = $(".sv-speed-val", frag);
   const orig = $(".sv-speed-orig", frag), msg = $(".sv-speed-msg", frag);

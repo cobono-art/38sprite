@@ -4,7 +4,9 @@ import unittest
 
 from helpers import TempDir, attack_frame, walk_frame, write_frames
 
-from spritegen.assemble import assemble, retime
+import numpy as np
+
+from spritegen.assemble import assemble, retime, set_move_scale, stance_dx
 
 
 class AssembleTest(unittest.TestCase):
@@ -51,6 +53,33 @@ class AssembleTest(unittest.TestCase):
             after = json.loads((td / "out" / "sheet_hd.json").read_text(encoding="utf-8"))
             self.assertAlmostEqual(after["move_speed"], before["move_speed"] * 2, delta=0.2)
             self.assertAlmostEqual(after["frame_ms"], before["frame_ms"] / 2, delta=0.2)
+
+    def test_stance_dx_tracks_planted_foot(self):
+        """땅에 닿은 발이 장마다 3px씩 뒤로 가다가(디딤) 발을 바꿀 때 앞으로 튀는 제자리 걷기 → 3px/장."""
+        alphas, x = [], 60
+        for t in range(36):
+            a = np.zeros((120, 120), np.float32)
+            a[20:100, 50:70] = 1                            # 몸
+            a[100:110, x:x + 8] = 1                          # 땅에 닿은 발
+            alphas.append(a)
+            x = x - 3 if t % 12 < 9 else x + 9               # 9장 디딤(뒤로 3px), 3장 발 바꿈(앞으로 9px)
+        self.assertAlmostEqual(stance_dx(alphas), 3.0, delta=0.3)
+
+    def test_move_scale_rewrites_speed(self):
+        with TempDir() as td:
+            folder = write_frames(td / "frames" / "E", [walk_frame(t) for t in range(64)])
+            assemble({"E": folder}, 2, (160, 160), 140, td / "out", kind="loop", n_frames=8, char_px=110,
+                     locomotion=True)
+            before = json.loads((td / "out" / "sheet_hd.json").read_text(encoding="utf-8"))
+            self.assertEqual(before["move_speed"], before["move_speed_auto"])
+            set_move_scale(td / "out", 1.5)
+            after = json.loads((td / "out" / "sheet_hd.json").read_text(encoding="utf-8"))
+            self.assertAlmostEqual(after["move_speed"], before["move_speed_auto"] * 1.5, delta=0.2)
+            self.assertAlmostEqual(after["velocity"]["E"][0], after["move_speed"], delta=0.2)
+            self.assertEqual(after["move_scale"], 1.5)
+            retime(td / "out", 2, after["fps"] * 2)          # 재생 속도를 바꿔도 배율은 그대로
+            again = json.loads((td / "out" / "sheet_hd.json").read_text(encoding="utf-8"))
+            self.assertAlmostEqual(again["move_speed"], again["move_speed_auto"] * 1.5, delta=0.3)
 
     def test_background_change_is_reported(self):
         frames = [walk_frame(t) for t in range(64)]
