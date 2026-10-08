@@ -96,9 +96,12 @@ async function loadStatus() {
     state.status = st;
     if (st.version) $("#app-version").textContent = `v${st.version}`;
     /* 처음 쓰는 사람에게: 아직 설치 안 한 선택 도구 */
+    const negOff = st.comfy && st.comfy.ok && st.comfy.backend !== "custom" && !st.comfy.neg_node;
     const missing = [!st.matting && "setup_matting.bat — AI 배경 지우기", !st.pose && "setup_pose.bat — 영상 → 3D 뼈대",
-      st.comfy && st.comfy.ok && st.comfy.backend !== "custom" && !st.comfy.neg_node && "setup_negative.bat — 빛 궤적 빼기 (ComfyUI 다시 켜기)"]
+      negOff && !st.neg_node_installed && "setup_negative.bat — 빛 궤적 빼기 (ComfyUI 다시 켜기)"]
       .filter(Boolean);
+    /* 노드는 깔렸는데 ComfyUI가 추가 노드를 끈 채로 켜져 있으면: 버튼 하나로 같은 설정 + 노드 허용으로 다시 켠다 */
+    $("#btn-comfy-restart").hidden = !(negOff && st.neg_node_installed && st.comfy_local) || state.comfyRestarting;
     $("#optional-tools").hidden = !missing.length;
     $("#optional-tools").textContent = missing.length ? `더 좋게 (선택, 앱 폴더에서 한 번 실행): ${missing.join(" · ")}` : "";
     const c = st.comfy;
@@ -1201,6 +1204,29 @@ function renderProject() {
   updateSetEta();
 }
 
+function setupComfyRestart() {
+  const btn = $("#btn-comfy-restart");
+  btn.addEventListener("click", async () => {
+    const say = t => (typeof LANG !== "undefined" && LANG === "en" ? tr(t) : t);   // 확인 창은 화면 번역이 안 닿는다
+    if (!confirm(say("영상 AI ComfyUI를 지금 설정 그대로, 빛 궤적 빼기 노드만 허용해서 다시 켤게요. 만들고 있는 작업이 있으면 끊겨요. 계속할까요?"))) return;
+    btn.disabled = true;
+    btn.textContent = "다시 켜는 중… (1분쯤)";
+    state.comfyRestarting = true;
+    try {
+      await postJSON("/api/comfy/restart");
+      for (let i = 0; i < 40; i++) {                   // 다시 켜질 때까지 (최대 2분) 상태를 본다
+        await new Promise(r => setTimeout(r, 3000));
+        await loadStatus();
+        if (state.status && state.status.comfy && state.status.comfy.neg_node) break;
+      }
+    } catch (e) { alert(say(e.message)); }
+    state.comfyRestarting = false;
+    btn.disabled = false;
+    btn.textContent = "빛 궤적 빼기 켜기";
+    await loadStatus();
+  });
+}
+
 function setupConfig() {
   const dlg = $("#dlg-config");
   $("#btn-config").addEventListener("click", () => {
@@ -1238,6 +1264,7 @@ async function init() {
   setupMotionForm();
   setupMotionSet();
   setupExports();
+  setupComfyRestart();
   setupConfig();
   requestAnimationFrame(frame);
   loadStatus();

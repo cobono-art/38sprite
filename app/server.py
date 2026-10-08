@@ -20,6 +20,7 @@ from aiohttp import web
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from spritegen import __version__, codex, comfy, export, matting  # noqa: E402
+from spritegen import comfy_launch  # noqa: E402
 from spritegen import project as store  # noqa: E402
 from spritegen.assemble import retime  # noqa: E402
 from spritegen.directions import NAME_KO, SHEET_ORDER, generated_directions, preview_layout, source_of  # noqa: E402
@@ -99,10 +100,38 @@ async def index(_):
 async def status(_):
     cfg = store.load_config()
     comfy_info, codex_info = await asyncio.gather(blocking(comfy.check, cfg["comfy_url"]), blocking(codex.check))
+    root = comfy_launch.comfy_root()
     return web.json_response({"config": cfg, "comfy": comfy_info, "codex": codex_info,
                               "presets": ANGLE_PRESETS, "dir_names": NAME_KO, "effect_words": EFFECT_WORDS,
                               "pose": pose_tools() is not None, "matting": matting.enabled(),
+                              "neg_node_installed": comfy_launch.node_installed(root),
+                              "comfy_local": bool(root and comfy_launch.local_port(cfg["comfy_url"])),
                               "version": __version__})
+
+
+def remember_comfy_args(url):
+    """켜져 있는 ComfyUI의 실행 옵션을 config.json에 기억한다 (다음에 꺼져 있으면 앱이 똑같이 켠다)."""
+    proc = comfy_launch.running(comfy_launch.local_port(url))
+    if proc:
+        user = store.user_config()
+        if user.get("comfy_args") != proc["args"]:
+            user["comfy_args"] = proc["args"]
+            store.save_config(user)
+    return proc
+
+
+@routes.post("/api/comfy/restart")
+async def restart_comfy(_):
+    """빛 궤적 빼기 노드가 깔렸는데 ComfyUI가 추가 노드를 끈 채로 켜져 있을 때: 같은 옵션 + 노드 허용으로 다시 켠다."""
+    cfg = store.load_config()
+    try:
+        args = await blocking(comfy_launch.restart_with_node, cfg["comfy_url"])
+    except RuntimeError as e:
+        return bad(str(e))
+    user = store.user_config()
+    user["comfy_args"] = args
+    store.save_config(user)
+    return web.json_response({"args": args})
 
 
 @routes.post("/api/config")
@@ -584,6 +613,12 @@ def main():
             store.save_config(user)
             print(f"ComfyUI를 찾았어요: {found} (config.json에 적어 둠)", flush=True)
     cfg = store.load_config()
+    if comfy_launch.local_port(cfg["comfy_url"]):      # 이 PC의 ComfyUI: 켜져 있으면 옵션을 기억, 꺼져 있으면 켠다
+        if comfy_launch.port_open(comfy_launch.local_port(cfg["comfy_url"])):
+            remember_comfy_args(cfg["comfy_url"])
+        elif comfy_launch.autostart(cfg, cfg["comfy_url"]):
+            print("영상 AI ComfyUI가 꺼져 있어서 켰어요 (1분쯤 걸려요). 끄려면 config.json에 \"comfy_autostart\": false",
+                  flush=True)
     port = args.port or cfg.get("port", 7870)
     store.PROJECTS.mkdir(exist_ok=True)
     mark_interrupted()

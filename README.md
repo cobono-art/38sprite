@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 - **Codex CLI 로그인** (ChatGPT 계정): 8방향 그림과 마네킹 키프레임을 만들 때 씁니다. 없으면 8방향 그림을 직접 올려서 쓸 수 있습니다(마네킹 모드는 제외).
 - **파이썬**: ComfyUI에 딸린 파이썬을 그대로 쓰면 됩니다. 다른 파이썬을 쓰려면 `pip install -r requirements.txt`
 - **(선택) 영상 → 3D 뼈대 도구**: `setup_pose.bat`을 한 번 실행하면 앱 전용 가상환경(`.venv-pose`)에 MediaPipe를 깔고 자세 모델(구글 공식, 약 30MB)을 `models/`에 받습니다. ComfyUI 파이썬과는 섞이지 않습니다. 파이썬 3.10~3.12가 필요하고, 받는 크기는 모두 합쳐 약 130MB입니다.
-- **(선택) 빛 궤적 빼기 노드**: `setup_negative.bat`을 한 번 실행하면 `comfyui_nodes/sprite_neg_h3`를 영상 AI ComfyUI의 `custom_nodes` 폴더에 복사합니다(받는 것 없음). ComfyUI를 다시 켜면 앱이 알아서 씁니다.
+- **(선택) 빛 궤적 빼기 노드**: `setup_negative.bat`을 한 번 실행하면 `comfyui_nodes/sprite_neg_h3`를 영상 AI ComfyUI의 `custom_nodes` 폴더에 복사합니다(받는 것 없음). ComfyUI를 다시 켜면 앱이 알아서 씁니다. ComfyUI를 추가 노드를 모두 끄는 옵션(`--disable-all-custom-nodes`)으로 켜 두었다면, 앱 위쪽의 '빛 궤적 빼기 켜기' 버튼이 같은 옵션에 이 노드만 허용해서 다시 켭니다.
 - **(선택) AI 배경 지우기 모델**: `setup_matting.bat`을 한 번 실행하면 BEN v2(PramaLLC, MIT)를 `models/ben2`에 받습니다(약 380MB). ComfyUI에 딸린 파이썬에는 torch가 이미 있어서 따로 설치할 것이 없습니다.
 
 ## 설치와 실행
@@ -135,6 +135,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 | `turbo_steps` | `6` | 방향별 바로 모드의 영상 생성 단계 수 (8이면 예전과 같고 약 25% 느림, 4는 배경에 잡티가 남음) |
 | `negative_weight` | `1.5` | 빛 궤적 빼기 노드의 세기 (0이면 안 씀). 노드가 설치돼 있고 빛 효과가 '없음'·'지우기'인 동작에만 씁니다 |
 | `negative_words` | (궤적·반짝임·빛무리 등) | 빛 궤적 빼기 노드로 뺄 것 (영어, 쉼표로) |
+| `comfy_autostart` | `true` | 앱을 켤 때 이 PC의 ComfyUI가 꺼져 있으면 켭니다 (마지막으로 본 실행 옵션 `comfy_args`를 그대로, 빛 궤적 빼기 노드가 깔려 있으면 그 노드를 허용) |
 | `bg_retry` | `2` | 영상 AI가 배경색을 바꾸거나 마젠타 위에 무늬(동심원 등)를 그렸을 때 새 시드로 다시 만들 횟수 (0이면 안 함) |
 | `mannequin_body` | `clay` | 3D 마네킹 모드 레퍼런스: `clay`(머리카락 없는 사람 모델) · `male` · `female` · `off`(원통 마네킹) |
 | `mannequin_bg` | `magenta` | 3D 마네킹 모드 배경: `magenta` 또는 예전 방식 `gray` |

@@ -128,6 +128,13 @@ const EN = {
     "Better results (optional, run once in the app folder): setup_pose.bat — video → 3D skeleton",
   "setup_pose.bat — 영상 → 3D 뼈대": "setup_pose.bat — video → 3D skeleton",
   "setup_matting.bat — AI 배경 지우기": "setup_matting.bat — AI matting",
+  "빛 궤적 빼기 켜기": "Turn on trail removal",
+  "이 PC의 ComfyUI가 아니라서 다시 켤 수 없어요": "That ComfyUI is not on this PC, so it can't be restarted",
+  "켜져 있는 ComfyUI를 찾지 못했어요": "Couldn't find the running ComfyUI", "다시 켜는 중… (1분쯤)": "Restarting… (about 1 min)",
+  "빛 궤적 빼기 노드가 깔려 있지만 ComfyUI가 추가 노드를 끈 채로 켜져 있어요. 같은 설정에 이 노드만 허용해서 다시 켜요.":
+    "The trail-removal node is installed, but ComfyUI is running with custom nodes disabled. Restart it with the same settings, allowing only this node.",
+  "영상 AI ComfyUI를 지금 설정 그대로, 빛 궤적 빼기 노드만 허용해서 다시 켤게요. 만들고 있는 작업이 있으면 끊겨요. 계속할까요?":
+    "Restart the video-AI ComfyUI with its current settings, allowing only the trail-removal node? Any job in progress will be interrupted.",
   "setup_negative.bat — 빛 궤적 빼기 (ComfyUI 다시 켜기)": "setup_negative.bat — remove light trails (restart ComfyUI)",
   // 진행 · 확인 · 실패
   "중지": "Stop", "준비 중": "Preparing", "키프레임 짜는 중": "Writing keyframes", "3D 마네킹 미리보기": "3D mannequin preview",

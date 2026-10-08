@@ -71,7 +71,8 @@ turnaround ─▶ Codex: 8-direction grid (3×3) ─▶ first frame per directio
   environment (`.venv-pose`) and downloads the pose model (Google's official model, about 30 MB) into `models/`, without
   touching ComfyUI's Python. Needs Python 3.10–3.12; about 130 MB in total.
 - **(Optional) light-trail removal node**: run `setup_negative.bat` once to copy `comfyui_nodes/sprite_neg_h3` into the
-  `custom_nodes` folder of your video-AI ComfyUI (nothing is downloaded). Restart ComfyUI and the app uses it automatically.
+  `custom_nodes` folder of your video-AI ComfyUI (nothing is downloaded). Restart ComfyUI and the app uses it automatically. If your ComfyUI runs with `--disable-all-custom-nodes`, the
+  "Turn on trail removal" button at the top restarts it with the same options, allowing only this node.
 - **(Optional) AI matting model**: run `setup_matting.bat` once to download BEN v2 (PramaLLC, MIT) into `models/ben2`
   (about 380 MB). The Python bundled with ComfyUI already has torch, so nothing else needs installing.
 
@@ -154,6 +155,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
 | `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
 | `negative_words` | (trails, sparkles, glows …) | What the node removes (English, comma-separated) |
+| `comfy_autostart` | `true` | When the app starts and the local ComfyUI is off, start it (with the last seen options `comfy_args`, allowing the trail-removal node if installed) |
 | `bg_retry` | `2` | How many times to regenerate with a new seed when the video AI changes the background color or draws patterns (rings etc.) on it (0 = never) |
 | `mannequin_body` | `clay` | 3D mannequin reference: `clay` (bald human model) · `male` · `female` · `off` (capsule mannequin) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
