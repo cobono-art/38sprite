@@ -155,15 +155,16 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
 | `negative_words` | (trails, sparkles, glows …) | What the node removes (English, comma-separated) |
 | `bg_retry` | `2` | How many times to regenerate with a new seed when the video AI changes the background color or draws patterns (rings etc.) on it (0 = never) |
+| `mannequin_body` | `clay` | 3D mannequin reference: `clay` (bald human model) · `male` · `female` · `off` (capsule mannequin) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
 
 ## Please read: licenses and notes
 
 - **The code in this repository** is under the [MIT License](LICENSE).
 - **The human 3D models** (`spritegen/assets/body/`) are [Quaternius](https://quaternius.com)' Universal Base Characters
-  (free standard pack), CC0 (public domain). They replace the mannequin only with the experimental setting
-  `"mannequin_body": "male"` in `config.json`: a human-looking reference can make the video AI copy its looks, so the
-  capsule mannequin is the default.
+  (free standard pack), CC0 (public domain). The 3D mannequin mode animates this model (bald clay look) by default:
+  its shading shows the video AI which arm is in front far better than the capsule mannequin. Without the skeleton-tool
+  environment (`setup_pose.bat`) the capsule mannequin is used.
 - **The AI matting model BEN v2** (PramaLLC) is MIT-licensed and not included in the repository; `setup_matting.bat`
   downloads it from Hugging Face.
 - **No video AI model is included.** To use MiniMax H3 you must check and follow MiniMax's model license yourself.

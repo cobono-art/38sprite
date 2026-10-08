@@ -136,12 +136,13 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 | `negative_weight` | `1.5` | 빛 궤적 빼기 노드의 세기 (0이면 안 씀). 노드가 설치돼 있고 빛 효과가 '없음'·'지우기'인 동작에만 씁니다 |
 | `negative_words` | (궤적·반짝임·빛무리 등) | 빛 궤적 빼기 노드로 뺄 것 (영어, 쉼표로) |
 | `bg_retry` | `2` | 영상 AI가 배경색을 바꾸거나 마젠타 위에 무늬(동심원 등)를 그렸을 때 새 시드로 다시 만들 횟수 (0이면 안 함) |
+| `mannequin_body` | `clay` | 3D 마네킹 모드 레퍼런스: `clay`(머리카락 없는 사람 모델) · `male` · `female` · `off`(원통 마네킹) |
 | `mannequin_bg` | `magenta` | 3D 마네킹 모드 배경: `magenta` 또는 예전 방식 `gray` |
 
 ## 꼭 읽어 주세요: 라이선스와 주의
 
 - **이 저장소의 코드**는 [MIT 라이선스](LICENSE)입니다.
-- **사람 3D 모델**(`spritegen/assets/body/`)은 [Quaternius](https://quaternius.com)의 Universal Base Characters(무료 기본판)이고 CC0(퍼블릭 도메인)입니다. 실험용 설정(`config.json`의 `"mannequin_body": "male"`)에서만 마네킹 대신 씁니다. 사람처럼 생긴 레퍼런스는 영상 AI가 생김새까지 베낄 수 있어서 기본은 원통 마네킹입니다.
+- **사람 3D 모델**(`spritegen/assets/body/`)은 [Quaternius](https://quaternius.com)의 Universal Base Characters(무료 기본판)이고 CC0(퍼블릭 도메인)입니다. 3D 마네킹 모드는 기본으로 이 사람 모델(머리카락 없는 점토 모습)을 움직여 레퍼런스 영상을 만듭니다. 음영이 있어서 원통 마네킹보다 어느 팔이 앞인지 영상 AI가 잘 알아봅니다. 뼈대 도구 가상환경(`setup_pose.bat`)이 없으면 원통 마네킹을 씁니다.
 - **AI 배경 지우기 모델 BEN v2**(PramaLLC)는 MIT 라이선스이고 저장소에 넣지 않습니다. `setup_matting.bat`이 Hugging Face에서 받습니다.
 - **영상 AI 모델은 포함하지 않습니다.** MiniMax H3를 쓰려면 MiniMax의 모델 라이선스를 직접 확인하고 따라야 합니다. 지역이나 상업적 사용에 제한이 있을 수 있습니다. 예를 들어 공개 라이선스 대상에서 빠진 지역은 MiniMax에 따로 허락을 받아야 할 수 있습니다.
 - **Codex**는 각자의 ChatGPT 계정으로 로그인해서 씁니다. 사용량은 본인 계정에서 차감됩니다. 계정을 공유하거나 남 대신 생성해 주는 서비스로 운영하면 안 됩니다.

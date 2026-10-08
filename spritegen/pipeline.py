@@ -316,21 +316,25 @@ def capture_pose(tools, video, out):
 
 
 BODY_DIR = Path(__file__).resolve().parent / "assets" / "body"
-BODY_MODELS = {"male": ("Superhero_Male_FullBody.gltf", "Hair_SimpleParted.gltf"),
+BODY_MODELS = {"clay": ("Superhero_Male_FullBody.gltf", None),
+               "male": ("Superhero_Male_FullBody.gltf", "Hair_SimpleParted.gltf"),
                "female": ("Superhero_Female_FullBody.gltf", "Hair_Buns.gltf")}
 
 
 def body_tools():
-    """사람 3D 모델(Quaternius, CC0)로 마네킹 영상을 그리는 도구: (가상환경 파이썬, 몸 모델, 머리카락 모델).
-    실험용이라 기본은 off(원통 마네킹): 사람처럼 생긴 레퍼런스를 주면 H3가 동작만이 아니라 생김새까지 베껴서
-    캐릭터 대신 회색 사람을 그리는 장면이 나왔다 (2026-10-08 문워크 시험). 설정 mannequin_body: off | male | female."""
+    """사람 3D 모델(Quaternius, CC0)로 마네킹 영상을 그리는 도구: (가상환경 파이썬, 몸 모델, 머리카락 모델 또는 None).
+    기본은 머리카락 없는 점토 사람(clay). 원통 마네킹은 앞팔·뒤팔이 똑같아 보여서 영상 AI가 뒤쪽 빈손을 휘두르는 일이
+    있었고(사용자도 알아보기 힘들다고 함), 사람 모델은 음영으로 어느 팔인지 보인다. 예전(2026-10-08 낮)에는 사람 모델이
+    생김새까지 베껴 회색 사람을 그렸지만, 금지문 없는 새 프롬프트로는 공격 5방향에서 베끼기가 없었다(같은 날 저녁 시험).
+    가상환경(setup_pose.bat)이 없으면 원통 마네킹. 설정 mannequin_body: clay(기본) | male | female | off(원통)."""
     cfg = store.load_config()
-    kind = cfg.get("mannequin_body", "off")
+    kind = cfg.get("mannequin_body", "clay")
     py = Path(cfg.get("pose_python") or store.ROOT / ".venv-pose" / "Scripts" / "python.exe")
     if kind not in BODY_MODELS or not py.exists():
         return None
-    body, hair = (BODY_DIR / f for f in BODY_MODELS[kind])
-    return (py, body, hair) if body.exists() else None
+    body_name, hair_name = BODY_MODELS[kind]
+    body = BODY_DIR / body_name
+    return (py, body, BODY_DIR / hair_name if hair_name else None) if body.exists() else None
 
 
 def render_body(tools, poses, dirs, mdir, elevation, size, scale, center, bg, name="mannequin_{d}.mp4"):
@@ -338,7 +342,7 @@ def render_body(tools, poses, dirs, mdir, elevation, size, scale, center, bg, na
     py, body, hair = tools
     joints = list(poses[0])
     (mdir / "poses.json").write_text(json.dumps({"joints": joints, "frames": [[P[j].tolist() for j in joints] for P in poses]}))
-    req = {"poses": str(mdir / "poses.json"), "model": str(body), "hair": str(hair) if hair.exists() else None,
+    req = {"poses": str(mdir / "poses.json"), "model": str(body), "hair": str(hair) if hair and Path(hair).exists() else None,
            "out": str(mdir), "dirs": dirs, "elevation": elevation, "size": size, "scale": float(scale),
            "center": [float(c) for c in center], "bg": list(bg), "fps": comfy.FPS, "name": name}
     (mdir / "body_request.json").write_text(json.dumps(req))
