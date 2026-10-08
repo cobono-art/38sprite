@@ -12,6 +12,32 @@ const SEC_PER_DIR = { text: 160, video: 720, mannequin: 200, follow: 720 };
 const STATUS_LABEL = { running: "만드는 중", done: "완료", error: "실패", cancelled: "중지됨", interrupted: "중단됨",
   review: "마스터 확인", keys_review: "마네킹 확인" };
 const MODE_LABEL = { mannequin: "3D 마네킹", master: "마스터 먼저", direct: "방향별 바로" };
+const FX_LABEL = { none: "효과 없음", vivid: "효과 살림", strip: "효과 지움" };
+const FX_HINT = {
+  none: "효과 없이 그려요. 걷기·대기·공격처럼 빛 효과가 없는 동작에 맞아요.",
+  vivid: "마법·검기 같은 빛 효과를 화려하게 살려서 그려요.",
+  strip: "영상 AI가 그린 빛 궤적을 지워요. 흰 옷·금발처럼 밝은 캐릭터는 구멍이 날 수 있어요.",
+};
+const MQ_DESC = {
+  text: "Codex가 짠 3D 동작을 방향마다 그 각도에서 따라 해요. 손·궤적·박자가 가장 잘 맞아요.",
+  pose: "영상에서 3D 뼈대를 뽑아(MediaPipe) 마네킹을 그대로 움직이고, 방향마다 그 각도에서 따라 해요. 옆모습도 같은 동작이 돼요.",
+  video: "Codex가 영상을 보고 3D 마네킹 동작으로 옮겨요. setup_pose.bat을 한 번 실행하면 영상에서 뼈대를 직접 뽑아 더 정확해져요.",
+};
+const fxOf = m => m.effects || (m.strip_effects ? "strip" : "vivid");
+const QA_TEXT = { hole: "구멍", fringe: "테두리 색 번짐", pink: "분홍 효과가 남음", shadow: "바닥 그림자",
+  empty: "빈 칸", seam: "반복 이음새가 튐", edge: "화면 밖으로 잘렸을 수 있음", size: "이 방향만 크기가 다름",
+  bg: "배경색이 바뀜" };
+const QA_TIP = {
+  hole: "옷이나 무기 한가운데가 뚫렸어요. 그 장을 눌러 다른 장면으로 바꾸거나, 이 방향만 다시 만들어 보세요.",
+  fringe: "가장자리에 배경색(분홍·초록)이 번졌어요. 그 장을 눌러 다른 장면으로 바꿔 보세요.",
+  pink: "영상 AI가 분홍빛 효과를 그렸어요. 그 장을 다른 장면으로 바꾸거나, 이 방향만 다시 만들어 보세요.",
+  shadow: "영상 AI가 발밑에 회색 그림자를 그렸어요. 게임에서 그림자를 따로 그린다면 이 방향만 다시 만들어 보세요.",
+  empty: "캐릭터가 거의 안 보이는 장이에요. 다른 장면으로 바꿔 보세요.",
+  seam: "마지막 장에서 첫 장으로 넘어갈 때 튀어 보여요. 프레임 수를 바꾸거나 다시 만들어 보세요.",
+  edge: "영상에서 캐릭터가 화면 끝에 닿았어요. 칼끝이나 발이 잘렸으면 이 방향만 다시 만들어 보세요.",
+  size: "이 방향만 캐릭터 키가 달라요. 방향 그림을 확인해 보세요.",
+  bg: "영상 AI가 영상 중간에 배경을 마젠타가 아닌 색으로 바꿨어요. 효과 둘레가 덜 깨끗할 수 있어요 — 이 방향만 다시 만들어 보세요.",
+};
 const DROP_TEXT = "삼면도 이미지를 끌어다 놓거나 눌러서 고르세요 (PNG·JPG)";
 
 const state = {
@@ -73,6 +99,7 @@ async function loadStatus() {
       c.error || `${c.url} · ComfyUI ${c.version || ""}`);
     setChip($("#st-codex"), st.codex.ok, st.codex.ok ? "Codex 로그인됨" : "Codex 확인 필요",
       st.codex.error || st.codex.version || "");
+    updateModeAvailability();
     if (state.project) renderSettings();
   } catch (e) {
     setChip($("#st-comfy"), false, "서버 오류", e.message);
@@ -234,10 +261,19 @@ function renderSheet() {
     img.src = fileUrl(p.id, sh.file) + `?v=${encodeURIComponent(sh.created)}`;
     const t = sh.settings;
     const differs = t.angle !== s.angle || t.count !== s.count || t.style !== s.style;
+    const facing = sh.facing || [];
+    const facingText = facing.length
+      ? `${facing.map(f => f.dir).join(", ")} 방향이 ${facing[0].looks === "front" ? "앞모습" : "뒷모습"}처럼 보여요. ` +
+        "아래 '한 방향만 다시 그리기'로 그 방향만 고칠 수 있어요." : "";
     warn = warn || sh.problem || (differs
-      ? `이 그림은 ${t.angle}° · ${t.count}방향 · ${styleName(t.style)}로 그렸어요. 지금 설정으로 쓰려면 다시 그려 주세요.` : "");
-    stateEl.textContent = `${t.count}방향 · ${t.angle}° · ${styleName(t.style)}${sh.uploaded ? " · 직접 올림" : ""}`;
-    stateEl.className = "small " + (sh.problem || differs ? "warn-text" : "ok-text");
+      ? `이 그림은 ${t.angle}° · ${t.count}방향 · ${styleName(t.style)}로 그렸어요. 지금 설정으로 쓰려면 다시 그려 주세요.` : "")
+      || facingText;
+    stateEl.textContent = `${t.count}방향 · ${t.angle}° · ${styleName(t.style)}${sh.uploaded ? " · 직접 올림" : ""}` +
+      (sh.fixed ? ` · ${sh.fixed} 다시 그림` : "");
+    stateEl.className = "small " + (sh.problem || differs || facing.length ? "warn-text" : "ok-text");
+    const sel = $("#redraw-dir"), prev = sel.value;
+    sel.replaceChildren(...generatedFor(t.count, t.mirror !== false).map(d => new Option(`${ARROWS[d]} ${d}`, d)));
+    sel.value = facing.length ? facing[0].dir : (prev && [...sel.options].some(o => o.value === prev) ? prev : sel.options[0].value);
   } else {
     stateEl.textContent = "3×3 나침반 배치(가운데 비움, 위가 뒷모습)로 그려요.";
     stateEl.className = "small muted";
@@ -266,6 +302,8 @@ function renderSheet() {
   const box = $("#sheet-job");
   const job = p.active_jobs.find(j => j.kind === "sheet");
   $("#btn-sheet").disabled = !!job;
+  $("#redraw-row").hidden = !sh || !!sh.problem;
+  $("#btn-redraw").disabled = !!job;
   box.hidden = !job;
   if (job) {
     box.dataset.job = job.id;
@@ -294,6 +332,14 @@ function setupSheet() {
     } catch (ex) { showText("#sheet-warn", ex.message); }
     e.target.value = "";
   });
+  $("#btn-redraw").addEventListener("click", async () => {
+    state.sheetError = "";
+    $("#btn-redraw").disabled = true;
+    try {
+      await postJSON(`/api/projects/${state.project.id}/sheet/redraw`, { dir: $("#redraw-dir").value });
+      await refreshProject();
+    } catch (e) { showText("#sheet-warn", e.message); $("#btn-redraw").disabled = false; }
+  });
   $("#sheet-btn").addEventListener("click", () => openImage($("#sheet-img").src, "방향 그림"));
   $("#p-turn-btn").addEventListener("click", () => openImage($("#p-turn").src, "삼면도"));
 }
@@ -308,8 +354,21 @@ function openImage(src, alt) {
 /* ---------- 3 · 동작 만들기 ---------- */
 
 let motionSource = "text", motionKind = "loop", motionMode = "direct", modeTouched = false, submitting = false;
+let fxMode = "none", fxTouched = false;
 
-const defaultMode = () => (motionKind === "oneshot" ? (motionSource === "video" ? "master" : "mannequin") : "direct");
+const defaultMode = () => (motionKind === "oneshot" ? "mannequin" : "direct");
+
+/* 빛 효과: 설명에 마법·검기 같은 말이 있으면 '살리기', 아니면 '없음' (직접 고르면 그대로 둔다) */
+function autoEffects(text) {
+  const words = (state.status && state.status.effect_words) || ["마법", "검기", "번개", "불꽃", "빛", "magic"];
+  const t = (text || "").toLowerCase();
+  return words.some(w => t.includes(w)) ? "vivid" : "none";
+}
+function setFx(mode, auto) {
+  fxMode = mode;
+  $$("#fx-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.fx === mode)));
+  $("#fx-hint").textContent = FX_HINT[mode] + (auto && mode !== "none" ? " (설명을 보고 골랐어요)" : "");
+}
 
 function setMode(mode) {
   motionMode = mode;
@@ -318,16 +377,21 @@ function setMode(mode) {
     card.classList.toggle("on", on);
     $("input", card).checked = on;
   });
+  suggestFrames();
   updateEta();
 }
 
 function updateModeAvailability() {
-  const card = $('#mode-cards .mode[data-mode="mannequin"]');
-  const off = motionSource === "video";
-  card.classList.toggle("disabled", off);
-  $("input", card).disabled = off;
-  $(".mode-note", card).hidden = !off;
-  if (off && motionMode === "mannequin") setMode(defaultMode());
+  $("#mq-desc").textContent = motionSource === "text" ? MQ_DESC.text
+    : (state.status && state.status.pose ? MQ_DESC.pose : MQ_DESC.video);
+  suggestFrames();
+}
+
+/* 칸 수: 영상을 마네킹으로 따라 하는 반복 동작(춤)은 길어서 16장, 나머지는 8장 (직접 고르면 그대로) */
+let framesTouched = false;
+function suggestFrames() {
+  if (framesTouched) return;
+  $("#m-frames").value = motionSource === "video" && motionMode === "mannequin" && motionKind === "loop" ? "16" : "8";
 }
 
 function setupMotionForm() {
@@ -346,13 +410,18 @@ function setupMotionForm() {
     motionKind = b.dataset.kind;
     press("#kind-seg button", "kind", motionKind);
     if (!modeTouched) setMode(defaultMode());
+    suggestFrames();
   }));
+  $("#m-frames").addEventListener("change", () => { framesTouched = true; });
   $$("#mode-cards input").forEach(r => r.addEventListener("change", () => {
     if (!r.checked) return;
     modeTouched = true;
     setMode(r.value);
   }));
   setMode("direct");
+  $$("#fx-seg button").forEach(b => b.addEventListener("click", () => { fxTouched = true; setFx(b.dataset.fx, false); }));
+  $("#m-text").addEventListener("input", () => { if (!fxTouched) setFx(autoEffects($("#m-text").value), true); });
+  setFx("none", true);
   $("#form-motion").addEventListener("submit", async e => {
     e.preventDefault();
     showText("#motion-error", "");
@@ -363,7 +432,7 @@ function setupMotionForm() {
     fd.append("text", text);
     fd.append("frames", $("#m-frames").value);
     fd.append("name", $("#m-name").value.trim());
-    fd.append("strip_effects", $("#m-fx").checked ? "1" : "0");
+    fd.append("effects", fxMode);
     fd.append("mode", motionMode);
     if (motionSource === "video") {
       const v = $("#m-video").files[0];
@@ -380,6 +449,10 @@ function setupMotionForm() {
       $("#m-text").value = "";
       $("#m-name").value = "";
       $("#m-video").value = "";
+      fxTouched = false;
+      setFx("none", true);
+      framesTouched = false;
+      suggestFrames();
       state.selected = res.motion.id;
       await refreshProject();
     } catch (ex) { showText("#motion-error", ex.message); }
@@ -388,13 +461,61 @@ function setupMotionForm() {
   });
 }
 
+/* 기본 모션 세트: 대기·걷기·달리기·공격·피격·쓰러짐을 한 번에 건다 (공격·피격은 마네킹을 확인 없이 이어서) */
+async function setupMotionSet() {
+  try { state.setItems = await api("/api/motion_set"); }
+  catch { $("#set-box").hidden = true; return; }
+  $("#set-items").replaceChildren(...state.setItems.map(it => {
+    const lab = el("label", "check");
+    const cb = el("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+    cb.value = it.key;
+    cb.addEventListener("change", updateSetEta);
+    lab.title = it.text;
+    lab.append(cb, document.createTextNode(" " + it.name));
+    return lab;
+  }));
+  updateSetEta();
+  $("#btn-set").addEventListener("click", async () => {
+    const keys = $$("#set-items input:checked").map(c => c.value);
+    showText("#set-error", "");
+    $("#btn-set").disabled = true;
+    try {
+      const res = await postJSON(`/api/projects/${state.project.id}/motion_set`, { keys });
+      state.selected = res.motions[0].id;
+      await refreshProject();
+    } catch (e) { showText("#set-error", e.message); }
+    updateSetEta();
+  });
+}
+
+/* 방향 하나 만드는 시간(초). 서버의 default_seconds와 같은 규칙: 텍스트 반복 동작과 마네킹 한 번 동작은 3초 영상이라 빠르다 */
+const shortClip = (kind, mode, source, holdEnd) => source !== "video" && !holdEnd
+  && ((kind === "loop" && mode === "direct") || (kind === "oneshot" && mode === "mannequin"));
+const dirSec = (kind, mode, source, holdEnd) => {
+  if (mode === "mannequin") return shortClip(kind, mode, source, holdEnd) ? 120 : SEC_PER_DIR.mannequin;
+  return shortClip(kind, mode, source, holdEnd) ? 110 : SEC_PER_DIR[source] || SEC_PER_DIR.text;
+};
+
+function updateSetEta() {
+  if (!state.project || !state.setItems) return;
+  const s = state.project.settings, n = generatedFor(s.count, s.mirror).length;
+  const keys = new Set($$("#set-items input:checked").map(c => c.value));
+  const sec = state.setItems.filter(it => keys.has(it.key))
+    .reduce((a, it) => a + (it.mode === "mannequin" ? 50 : 0) + n * dirSec(it.kind, it.mode, "text", it.hold_end), 0);
+  const btn = $("#btn-set");
+  btn.textContent = `세트 만들기 (${keys.size}개) · 예상 ${Math.max(1, Math.round(sec / 60))}분`;
+  btn.disabled = !state.project.sheet || !keys.size;
+}
+
 function updateEta() {
   if (!state.project) return;
   const s = state.project.settings;
   const all = dirsFor(s.count).length;
   const n = generatedFor(s.count, s.mirror).length;
-  let sec = n * SEC_PER_DIR[motionSource];
-  if (motionMode === "mannequin") sec = 50 + n * SEC_PER_DIR.mannequin;            // 키프레임 짜기 + 터보
+  let sec = n * dirSec(motionKind, motionMode, motionSource, false);
+  if (motionMode === "mannequin") sec = 50 + n * dirSec(motionKind, motionMode, motionSource, false);   // 키프레임 짜기 + 터보
   else if (motionMode === "master") sec = SEC_PER_DIR[motionSource] + (n - 1) * SEC_PER_DIR.follow;
   const noSheet = !state.project.sheet;
   const btn = $("#btn-motion");
@@ -525,10 +646,13 @@ function buildReview(view, p, m) {
   img.alt = keys ? "3D 마네킹 키프레임 미리보기" : "마스터 방향 원본 영상";
   $(".rv-title", frag).textContent = `${m.name} · ${keys ? "마네킹 확인" : "마스터 확인"}`;
   $(".rv-text", frag).textContent = keys
-    ? "Codex가 짠 3D 마네킹 동작이에요. 밝은 팔이 오른팔이고, 얼굴 점이 보는 방향이에요. 모든 방향이 이 동작을 그 방향 각도에서 그대로 따라 해요."
+    ? (m.source === "video"
+      ? "레퍼런스 영상에서 뽑은 3D 동작이에요. 모든 방향이 이 동작을 그 방향 각도에서 그대로 따라 해요."
+      : "Codex가 짠 3D 동작이에요. 모든 방향이 이 동작을 그 방향 각도에서 그대로 따라 해요. 마음에 안 들면 다시 짜게 하세요.")
     : `마스터(${ARROWS[m.master] || ""} ${m.master}) 영상이에요. 나머지 방향이 이 동작을 그대로 따라 해요. 마음에 들면 이어서 만들고, 아니면 마스터를 다시 만드세요.`;
   go.textContent = keys ? "이 동작으로 만들기" : "이 동작으로 나머지 방향 만들기";
   again.textContent = keys ? "키프레임 다시 짜기" : "마스터 다시 만들기";
+  again.hidden = keys && m.source === "video";        // 영상에서 뽑은 동작은 다시 뽑아도 같다
   const errBox = $(".rv-error", frag);
   const post = async (url, btn) => {
     btn.disabled = true;
@@ -748,6 +872,49 @@ function buildPlayer(view, p, m) {
   const avail = new Set(dirsFor(s.count));
   const press = () => $$("button", dpad).forEach(b =>
     b.setAttribute("aria-pressed", String(player.view === "one" && b.dataset.dir === player.dir)));
+  /* 이 방향만 다시 만들기: 지금 보는 방향(반전 방향이면 원래 방향)만 새로 만들고 시트를 다시 조립한다 */
+  const redo = $(".sv-redo", frag), redoMsg = $(".sv-redo-msg", frag);
+  const genDirs = generatedFor(s.count, s.mirror);
+  const updateRedo = () => {
+    const d = player.dir, src = genDirs.includes(d) ? d : MIRROR[d];
+    redo.textContent = `${ARROWS[d]} ${d} 방향만 다시 만들기`;
+    redo.title = src !== d ? `${d}는 ${src}를 뒤집은 거라 ${src}를 다시 만들어요`
+      : "이 방향 영상만 새로 만들고 시트를 다시 조립해요 (2~4분)";
+  };
+  redo.addEventListener("click", async () => {
+    redo.disabled = true;
+    showText(".sv-redo-msg", "다시 만드는 중…", redoMsg.parentElement);
+    try {
+      await postJSON(`/api/projects/${p.id}/motions/${m.id}/redo`, { dir: player.dir });
+      await refreshProject();
+    } catch (e) { showText(".sv-redo-msg", e.message, redoMsg.parentElement); redo.disabled = false; }
+  });
+  if (m.redo_error) showText(".sv-redo-msg", `지난번 다시 만들기가 실패했어요: ${m.redo_error}`, redoMsg.parentElement);
+  /* 되돌리기: 가장 최근 '이 방향만 다시 만들기' 전 결과와 지금 결과를 맞바꾼다 (한 번 더 누르면 다시 앞으로) */
+  const undo = $(".sv-undo", frag), last = (m.versions || []).at(-1);
+  if (last) {
+    const dirs = last.dirs.join("·");
+    undo.hidden = false;
+    undo.textContent = last.holds === "previous" ? `↶ ${dirs} 다시 만들기 전으로 되돌리기` : `↷ 다시 만든 ${dirs}로 돌아가기`;
+    undo.title = "두 결과를 맞바꿔요. 마음에 드는 쪽으로 언제든 다시 바꿀 수 있어요";
+    undo.addEventListener("click", async () => {
+      undo.disabled = redo.disabled = true;
+      showText(".sv-redo-msg", "바꾸는 중…", redoMsg.parentElement);
+      try {
+        await postJSON(`/api/projects/${p.id}/motions/${m.id}/versions/${last.id}/swap`, {});
+        await refreshProject();
+      } catch (e) { showText(".sv-redo-msg", e.message, redoMsg.parentElement); undo.disabled = redo.disabled = false; }
+    });
+  }
+  const goDir = d => {
+    player.dir = pref.dir = d;
+    player.view = pref.view = "one";
+    setSeg(viewSeg, "view", "one");
+    if (player.meta) player.resize();
+    press();
+    updateRedo();
+    frames.render();
+  };
   COMPASS.flat().forEach(d => {
     if (!d) { dpad.append(el("span")); return; }
     const b = el("button", "", ARROWS[d]);
@@ -756,16 +923,11 @@ function buildPlayer(view, p, m) {
     b.title = d;
     b.setAttribute("aria-label", `${d} 방향만 보기`);
     b.disabled = !avail.has(d);
-    b.addEventListener("click", () => {
-      player.dir = pref.dir = d;
-      player.view = pref.view = "one";
-      setSeg(viewSeg, "view", "one");
-      if (player.meta) player.resize();
-      press();
-      frames.render();
-    });
+    b.addEventListener("click", () => goDir(d));
     dpad.append(b);
   });
+  renderQa($(".sv-qa", frag), rep, goDir);
+  updateRedo();
   setSeg(viewSeg, "view", pref.view);
   press();
   segHandler(viewSeg, "view", v => { player.view = pref.view = v; if (player.meta) player.resize(); press(); });
@@ -791,13 +953,29 @@ function buildPlayer(view, p, m) {
     ["그림 수", `${rep.frames}장`],
     ["생성", `${gen.length}방향${gen.length < all ? ` + 반전 ${all - gen.length}` : ""}`],
     ["방식", `${MODE_LABEL[m.mode || "direct"]}${m.source === "video" ? " · 영상" : ""}`],
-    ["보기", `${s.angle}° · ${m.strip_effects ? "이펙트 지움" : "이펙트 그대로"}`],
+    ["보기", `${s.angle}° · ${FX_LABEL[fxOf(m)]}`],
   ];
   $(".stats", frag).replaceChildren(...rows.flatMap(([k, v]) => [el("dt", "", k), el("dd", "", v)]));
   $(".sv-text", frag).textContent = m.text || "";
   addRawPreviews($(".raw-row", frag), p, m.id, gen);
   view.append(frag);
   load(pref.res);
+}
+
+/* 자동 점검 결과: 누르면 그 방향으로 가고, 문제가 있는 장은 장면 바꾸기 줄에 노랗게 표시된다 */
+function renderQa(box, rep, goDir) {
+  if (!Array.isArray(rep.qa)) return;                // 점검 기능이 생기기 전에 만든 동작
+  if (!rep.qa.length) { box.append(el("p", "small ok-text", "자동 점검: 문제 없음")); return; }
+  box.append(el("p", "small warn-text", `자동 점검: 확인할 곳 ${rep.qa.length}개`));
+  for (const q of rep.qa) {
+    const which = q.frames && q.frames.length ? ` (${q.frames.map(f => f + 1).join("·")}번째 장)` : "";
+    const b = el("button", "ghost small qa-item", `${ARROWS[q.dir] || ""} ${q.dir} · ${QA_TEXT[q.type] || q.type}${which}`);
+    b.type = "button";
+    b.title = QA_TIP[q.type] || "";
+    b.addEventListener("click", () => goDir(q.dir));
+    box.append(b);
+  }
+  box.append(el("p", "small muted", "누르면 그 방향으로 가요. 표시된 장을 눌러 다른 장면으로 바꿀 수 있어요."));
 }
 
 /* 장면 바꾸기(후처리): 이상한 장을 H3 영상의 앞뒤 장면 중 하나로 바꾼다. 서버가 시트·GIF를 다시 만든다(30초쯤). */
@@ -810,12 +988,15 @@ function setupFrames(frag, p, m, player) {
   const cands = $(".fr-cands", picker), msg = $(".fr-msg", picker);
   let slot = -1, openDir = null;
   const changed = (d, k) => String(k) in (((m.frame_overrides || {})[gen.includes(d) ? d : MIRROR[d]]) || {});
+  const flagged = d => new Set((m.result.report.qa || []).filter(q => q.dir === (gen.includes(d) ? d : MIRROR[d]))
+    .flatMap(q => q.frames || []));
 
   function render() {
     if (!player.meta || !player.img) return;
     const d = player.dir, rects = player.meta.directions[d] || [];
     if (!picker.hidden && openDir !== d) { picker.hidden = true; slot = -1; }
     title.textContent = `${ARROWS[d]} ${d} 방향 ${rects.length}장`;
+    const qa = flagged(d);
     strip.replaceChildren(...rects.map((r, k) => {
       const b = el("button", "fr-thumb");
       b.type = "button";
@@ -829,6 +1010,7 @@ function setupFrames(frag, p, m, player) {
       ctx.drawImage(player.img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
       b.append(c, el("span", "fr-num", String(k + 1)));
       if (changed(d, k)) { b.classList.add("changed"); b.append(el("span", "fr-badge", "바꿈")); }
+      else if (qa.has(k)) { b.classList.add("qa-flag"); b.append(el("span", "fr-badge", "확인")); }
       b.addEventListener("click", () => open(k));
       return b;
     }));
@@ -937,6 +1119,7 @@ function updateExports(p, m, res) {
   link("#ex-gif", fileUrl(p.id, `${base}/preview_${res}.gif`), `${safe}_${res}.gif`);
   link("#ex-png", fileUrl(p.id, `${base}/sheet_${res}.png`), `${safe}_${res}.png`);
   link("#ex-json", fileUrl(p.id, `${base}/sheet_${res}.json`), `${safe}_${res}.json`);
+  link("#ex-all", `/api/projects/${p.id}/download`, `${(p.name || "character").replace(/[\\/:*?"<>|]+/g, "_")}_all.zip`);
   $("#exports").hidden = false;
 }
 
@@ -963,6 +1146,7 @@ function renderProject() {
   renderSheet();
   renderResults();
   updateEta();
+  updateSetEta();
 }
 
 function setupConfig() {
@@ -990,6 +1174,7 @@ async function init() {
   setupSettings();
   setupSheet();
   setupMotionForm();
+  setupMotionSet();
   setupConfig();
   requestAnimationFrame(frame);
   loadStatus();

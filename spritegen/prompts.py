@@ -55,38 +55,85 @@ def sheet_prompt(dirs, deg, style="hd", pixel_height=64, pose=None):
     )
 
 
-COMMON_TAIL = (
-    "Locked-off static camera at the same angle: no zoom, no pan, no rotation, no camera shake. The flat, uniform "
-    "solid magenta (#FF00FF) chroma-key background stays completely unchanged, with no floor and no shadows; the "
-    "character is lit by neutral white light, with no pink or magenta light on the character. Keep the exact character design, "
-    "colors and art style. No motion-blur trails, no visual effects, no text. Audio: quiet."
-)
-FX_TAIL = (
-    "Locked-off static camera at the same angle: no zoom, no pan, no rotation, no camera shake. The flat, uniform "
-    "solid magenta (#FF00FF) chroma-key background stays completely unchanged, with no floor and no shadows; the "
-    "character is lit by neutral white light, with no pink or magenta light on the character. Keep the exact character design, "
-    "colors and art style. Make the magical visual effects of the motion vivid and sparkling (stars, sparkles, glowing "
-    "light trails, light bursts) in gold, white, cyan and blue only, never pink, magenta or purple. No text. "
-    "Audio: magical chimes."
-)
+VIEW = {
+    "S": "the front view: the character faces straight toward the camera",
+    "SE": "the front three-quarter view: the character faces toward the lower-right of the image, toward the camera, so "
+          "we see the face and the front of the body turned to the right",
+    "E": "the side view: the character faces exactly toward the right edge of the image, in profile",
+    "NE": "the back three-quarter view: the character faces toward the upper-right of the image, AWAY from the camera, so "
+          "we see the back of the head, the back and a little of the right side; the face is NOT visible",
+    "N": "the back view: the character faces straight away from the camera toward the top of the image; we see the back "
+         "of the head and the back; the face is NOT visible",
+    "NW": "the back three-quarter view: the character faces toward the upper-left of the image, AWAY from the camera, so "
+          "we see the back of the head, the back and a little of the left side; the face is NOT visible",
+    "W": "the side view: the character faces exactly toward the left edge of the image, in profile",
+    "SW": "the front three-quarter view: the character faces toward the lower-left of the image, toward the camera, so "
+          "we see the face and the front of the body turned to the left",
+}
+
+
+def redraw_prompt(d, deg, style="hd", pixel_height=64):
+    """방향 그림에서 한 칸만 다시 그릴 때: 그 방향 하나만 같은 캐릭터·같은 카메라로."""
+    return ("$imagegen The reference images show one character: an eight-direction sheet (3x3 grid; top row = back "
+            "views, bottom row = front views) and a turnaround. Draw ONE single full-body view of this exact same "
+            f"character in {VIEW[d]}. Use {camera_text(deg)}, exactly like the sheet, and the same pose as the other views "
+            "in the sheet (items held in the right hand stay in the right hand). Same face, hair, outfit, colors and "
+            f"proportions. Style: {style_text(style, pixel_height)}. Plain flat light gray ({SHEET_BG}) background, no "
+            "floor, no shadow, no text. Only generate the image with the image tool; do not try to save, copy, move or "
+            "list any files.")
+
+
+CAMERA = "Locked-off static camera at the same angle: no zoom, no pan, no rotation, no camera shake. "
+# 배경은 처음부터 끝까지 마젠타 한 색: 영상 AI가 빛 효과 장면에서 배경을 빨강·주황·파랑으로 바꾸거나 흰색으로 바꾸면
+# 크로마키로 깨끗하게 오릴 수 없다 (2026-10-08 홍보영상 재료에서 실제로 일어남). 그래서 매 프레임 같다고 여러 번 못 박는다.
+BG_MAGENTA = ("The background is one flat, uniform, solid magenta (#FF00FF) chroma-key color in every single frame, from "
+              "the first frame to the last: it never changes color, brightness or lighting, with no floor, no shadows "
+              "and no gradients. ")
+BG_GRAY = "The plain flat gray studio background stays completely unchanged, with no floor and no shadows. "
+LIGHT = ("The character is lit by neutral white light, with no pink or magenta light on the character. Keep the exact "
+         "character design, colors and art style. ")
+COMMON_TAIL = CAMERA + BG_MAGENTA + LIGHT + "No motion-blur trails, no visual effects, no text. Audio: quiet."
+FX_TAIL = (CAMERA + BG_MAGENTA + LIGHT + "Make the magical visual effects of the motion vivid and sparkling (stars, "
+           "sparkles, glowing light trails, light bursts) in gold, white, cyan and blue only, never pink, magenta or "
+           "purple. The effects are drawn on top of the magenta background and never recolor, tint or light up the "
+           "background. No text. Audio: magical chimes.")
 NO_FX = " No visual effects: no slash trails, no light arcs, no glow, no particles."
+
+# 이런 말이 들어간 동작은 빛 효과를 살려서 그리고, 나머지는 효과 없이 그린다.
+# ('지우기'는 흰 옷·금발처럼 밝은 캐릭터에 구멍을 낼 수 있어서 기본으로 쓰지 않는다)
+EFFECT_WORDS = ("마법", "주문", "시전", "마나", "불꽃", "화염", "불덩이", "번개", "전기", "얼음", "냉기", "광선", "레이저",
+                "검기", "오라", "폭발", "충격파", "치유", "회복", "소환", "버프", "이펙트", "파티클", "반짝", "빛",
+                "magic", "spell", "cast", "fire", "flame", "lightning", "thunder", "frost", "beam", "laser", "aura",
+                "explosion", "heal", "summon", "glow", "sparkle", "effect")
+
+
+def auto_effects(text):
+    """동작 설명으로 빛 효과 방식을 고른다: vivid(화려하게 살림) | none(효과 없이)."""
+    t = (text or "").lower()
+    return "vivid" if any(w in t for w in EFFECT_WORDS) else "none"
 
 
 def tail(effects=False, gray=False):
     """효과를 살릴 동작(effects=True)은 반짝이·빛을 화려하게, 아니면 효과 없이.
-    gray: 첫 프레임이 회색 배경일 때 (마네킹 모드) 배경 설명도 회색으로."""
+    gray: 첫 프레임이 회색 배경일 때 (예전 마네킹 모드) 배경 설명도 회색으로."""
     t = FX_TAIL if effects else COMMON_TAIL
-    return t.replace("solid magenta (#FF00FF) chroma-key background", "plain flat gray studio background") if gray else t
+    return t.replace(BG_MAGENTA, BG_GRAY) if gray else t
 
 
-def motion_prompt(kind, motion, deg, d, style="hd", effects=False):
-    """텍스트 동작 설명 → H3 이미지→영상 프롬프트. motion은 한국어여도 된다 (H3 텍스트 인코더가 다국어)."""
+def motion_prompt(kind, motion, deg, d, style="hd", effects=False, hold_end=False):
+    """텍스트 동작 설명 → H3 이미지→영상 프롬프트. motion은 한국어여도 된다 (H3 텍스트 인코더가 다국어).
+    hold_end: 처음 자세로 돌아오지 않고 마지막 자세로 끝나는 동작 (쓰러짐 등)."""
     facing = FACING[d]
     pixel = " Keep the crisp pixel-art look with large square pixels and no blur." if style == "pixel" else ""
     if kind == "loop":
         body = (f"The character from <Picture 1> performs this motion in place, facing {facing}, as a steady, "
                 f"seamless loop: {motion}. The character keeps facing {facing} for the whole clip, never turns, and "
                 "stays on the same spot at the same size without moving across the frame.")
+    elif hold_end:
+        body = (f"The character from <Picture 1> starts in exactly this pose, facing {facing}, and performs this "
+                f"action ONCE: {motion}. The character does NOT return to the starting pose: it stays completely still "
+                f"in the final pose until the end of the clip. The character keeps facing {facing} and stays on the "
+                "same spot.")
     else:
         body = (f"The character from <Picture 1> starts in exactly this pose, facing {facing}, and performs this "
                 f"action ONCE: {motion}. Then the character returns to the same starting pose and stays still until "
@@ -122,8 +169,9 @@ def follow_prompt(kind, deg, d, hint="", style="hd", effects=False):
             f"not move across the frame.{extra}{'' if effects else NO_FX}{pixel} {tail(effects)}")
 
 
-def mannequin_prompt(deg, d, hint="", style="hd", effects=False):
-    """3D 마네킹 레퍼런스(그 방향에서 본 영상) → 캐릭터를 입힌 영상. 첫 프레임·마네킹 모두 회색 배경이다."""
+def mannequin_prompt(deg, d, hint="", style="hd", effects=False, gray=False):
+    """3D 마네킹 레퍼런스(그 방향에서 본 영상) → 캐릭터를 입힌 영상. 첫 프레임과 마네킹 영상은 같은 배경색이어야 한다
+    (다르면 둘을 섞은 얼룩무늬 배경이 나온다). 기본은 둘 다 마젠타, gray면 예전처럼 둘 다 회색."""
     facing = FACING[d]
     extra = f" The motion is: {hint}." if hint else ""
     pixel = " Keep the crisp pixel-art look with large square pixels and no blur." if style == "pixel" else ""
@@ -132,4 +180,4 @@ def mannequin_prompt(deg, d, hint="", style="hd", effects=False):
             f"the same facing and the same camera angle. The character faces {facing}. Anything the mannequin holds "
             f"stays in the same hand; an empty mannequin hand stays empty. The character stays on the same spot at the "
             f"same size. Only the motion comes from <Video 1>; the look, outfit, proportions and art style come from "
-            f"<Picture 1>.{extra}{'' if effects else NO_FX}{pixel} {tail(effects, gray=True)}")
+            f"<Picture 1>.{extra}{'' if effects else NO_FX}{pixel} {tail(effects, gray=gray)}")

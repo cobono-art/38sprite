@@ -15,3 +15,7 @@ workflows/r2v.json
 *.log
 .DS_Store
 Thumbs.db
+
+# 영상 → 3D 뼈대 도구 (setup_pose.bat이 만듦)
+.venv-pose/
+models/

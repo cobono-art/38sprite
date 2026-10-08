@@ -18,6 +18,7 @@
     <span class="chip" id="st-comfy" title="영상 AI (ComfyUI)">영상 AI 확인 중…</span>
     <span class="chip" id="st-codex" title="Codex 이미지 생성">Codex 확인 중…</span>
     <button type="button" class="ghost" id="btn-config">연결 설정</button>
+    <button type="button" class="ghost" id="btn-lang">EN</button>
   </div>
 </header>
 
@@ -83,6 +84,11 @@
           <label class="button ghost">직접 올리기<input type="file" id="sheet-file" accept="image/png,image/jpeg,image/webp" hidden></label>
         </div>
       </div>
+      <div class="line redraw" id="redraw-row" hidden>
+        <span class="small muted">한 방향만</span>
+        <select id="redraw-dir" aria-label="다시 그릴 방향"></select>
+        <button type="button" class="ghost" id="btn-redraw">다시 그리기</button>
+      </div>
       <div class="job" id="sheet-job" hidden><div class="bar"><i></i></div><span class="job-msg"></span></div>
       <p class="warn" id="sheet-warn" hidden></p>
       <div class="history" id="sheet-history"></div>
@@ -107,7 +113,7 @@
         </div>
         <div class="line">
           <label class="field inline"><span>프레임</span>
-            <select id="m-frames"><option>6</option><option selected>8</option><option>10</option><option>12</option><option>16</option></select>
+            <select id="m-frames"><option>6</option><option selected>8</option><option>10</option><option>12</option><option>16</option><option>24</option></select>
           </label>
           <label class="field inline grow"><span>이름</span><input id="m-name" maxlength="30" placeholder="비우면 설명에서"></label>
         </div>
@@ -115,7 +121,7 @@
           <legend>방향 맞추는 방식</legend>
           <label class="mode" data-mode="mannequin">
             <input type="radio" name="mode" value="mannequin">
-            <span class="mode-text"><b>3D 마네킹</b><span class="mode-desc">Codex가 짠 3D 동작을 방향마다 그 각도에서 따라 해요. 손·궤적·박자가 가장 잘 맞아요.</span><span class="mode-note" hidden>레퍼런스 영상에서는 못 써요</span></span>
+            <span class="mode-text"><b>3D 마네킹</b><span class="mode-desc" id="mq-desc">Codex가 짠 3D 동작을 방향마다 그 각도에서 따라 해요. 손·궤적·박자가 가장 잘 맞아요.</span></span>
           </label>
           <label class="mode" data-mode="master">
             <input type="radio" name="mode" value="master">
@@ -126,11 +132,25 @@
             <span class="mode-text"><b>방향별 바로</b><span class="mode-desc">방향마다 따로 만들어요. 걷기·대기처럼 단순한 동작에 빠르고 충분해요.</span></span>
           </label>
         </fieldset>
-        <label class="check" title="끄면 영상 AI가 반짝이·빛 궤적 같은 효과를 화려하게 살려서 그려요"><input type="checkbox" id="m-fx" checked> 빛 이펙트 지우기 (끄면 화려한 효과를 살려요)</label>
+        <div class="line">
+          <span class="line-label wide">빛 효과</span>
+          <div class="seg" id="fx-seg">
+            <button type="button" data-fx="none" aria-pressed="true">없음</button>
+            <button type="button" data-fx="vivid" aria-pressed="false">살리기</button>
+            <button type="button" data-fx="strip" aria-pressed="false">지우기</button>
+          </div>
+        </div>
+        <p class="muted small" id="fx-hint"></p>
         <p class="error" id="motion-error" hidden></p>
         <button type="submit" class="primary big" id="btn-motion">동작 만들기</button>
         <p class="muted small center" id="motion-eta"></p>
       </form>
+      <div class="set-box" id="set-box">
+        <div class="set-head"><b>기본 모션 세트</b><span class="muted small">게임에 넣을 동작 묶음을 한 번에 만들어요</span></div>
+        <div class="set-items" id="set-items"></div>
+        <button type="button" class="ghost" id="btn-set">세트 만들기</button>
+        <p class="error small" id="set-error" hidden></p>
+      </div>
     </section>
   </aside>
 
@@ -138,10 +158,11 @@
     <div class="results-bar">
       <div class="tabs" id="motion-tabs" role="tablist" aria-label="동작"></div>
       <div class="exports" id="exports" hidden>
-        <a class="button" id="ex-zip" download>ZIP 받기</a>
+        <a class="button" id="ex-zip" download title="시트 PNG·JSON·GIF + Aseprite/Phaser JSON, Godot SpriteFrames, 프레임 PNG(Unity 등)">ZIP 받기 (엔진용 포함)</a>
         <a class="button ghost" id="ex-gif" download>GIF</a>
         <a class="button ghost" id="ex-png" download>시트 PNG</a>
         <a class="button ghost" id="ex-json" download>JSON</a>
+        <a class="button ghost" id="ex-all" download title="다 만든 동작 전부 + Godot 하나로 합친 SpriteFrames">전체 받기</a>
       </div>
     </div>
     <div class="motion-view" id="motion-view" role="tabpanel"></div>
@@ -194,7 +215,11 @@
         <div class="line"><span class="muted small sv-speed-orig"></span><button type="button" class="ghost small sv-speed-reset">원래대로</button></div>
         <span class="small muted sv-speed-msg" aria-live="polite"></span>
       </div>
+      <button type="button" class="ghost small sv-redo"></button>
+      <button type="button" class="ghost small sv-undo" hidden></button>
+      <p class="small muted sv-redo-msg" aria-live="polite" hidden></p>
       <dl class="stats"></dl>
+      <div class="sv-qa"></div>
       <p class="muted small sv-text"></p>
       <p class="error small sv-error" hidden></p>
     </aside>
@@ -247,6 +272,7 @@
   </div>
 </template>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

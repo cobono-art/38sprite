@@ -96,6 +96,45 @@ def detect_cells(src, required, thresh=40):
     return bg, cells, masks
 
 
+def facing_scores(src, dirs):
+    """방향마다 머리 쪽(캐릭터 윗부분 35%) 색 분포가 뒷모습(N)·앞모습(S)과 얼마나 닮았는지.
+    얼굴이 보이면 피부·눈 색, 뒤를 보면 머리카락·등 색이 많아서 앞뒤가 갈린다. {방향: (N과 닮음, S와 닮음)}"""
+    _, cells, masks = detect_cells(src, dirs)
+    hists = {}
+    for d in dirs:
+        x0, y0, x1, y1 = cells[d]
+        top = y0 + max(1, int((y1 - y0) * 0.35))
+        px = src[y0:top, x0:x1][masks[d][y0:top, x0:x1]]
+        if len(px) < 50:
+            return {}
+        q = (px // 64).astype(int)
+        h = np.bincount(q[:, 0] * 16 + q[:, 1] * 4 + q[:, 2], minlength=64).astype(float)
+        hists[d] = h / h.sum()
+    return {d: (float(np.minimum(h, hists["N"]).sum()), float(np.minimum(h, hists["S"]).sum()))
+            for d, h in hists.items()}
+
+
+def facing_problems(src, dirs, margin=0.08):
+    """8방향 그림에서 앞뒤가 바뀐 대각선을 찾는다: 뒤 대각선(NE·NW)이 앞모습(S)을 더 닮았거나,
+    앞 대각선(SE·SW)이 뒷모습(N)을 더 닮았으면. [{"dir": 방향, "looks": "front" | "back"}]"""
+    if not {"N", "S"} <= set(dirs):
+        return []
+    try:
+        scores = facing_scores(src, dirs)
+    except ValueError:
+        return []
+    out = []
+    for d, back_wanted in (("NE", True), ("NW", True), ("SE", False), ("SW", False)):
+        if d not in scores:
+            continue
+        back, front = scores[d]
+        if back_wanted and front > back + margin:
+            out.append({"dir": d, "looks": "front"})
+        elif not back_wanted and back > front + margin:
+            out.append({"dir": d, "looks": "back"})
+    return out
+
+
 def cutout(src, cells, masks, name, scale, resample=Image.LANCZOS):
     """한 방향 캐릭터를 잘라 배율을 적용한 (RGB, 알파) 이미지 쌍을 돌려준다 (픽셀아트는 resample=NEAREST)."""
     x0, y0, x1, y1 = cells[name]

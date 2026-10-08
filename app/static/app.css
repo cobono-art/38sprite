@@ -86,7 +86,7 @@ button:focus-visible, .button:focus-visible, input:focus-visible, select:focus-v
 .num { width: 20px; height: 20px; border-radius: 50%; background: var(--ctl); color: var(--fg); display: inline-grid; place-items: center; font-size: 12px; letter-spacing: 0; }
 .line { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
 .line > span:first-child:not(.line-label) { flex: 1; }
-.line-label { width: 44px; flex: none; }
+.line-label { min-width: 44px; flex: none; }
 .value { color: var(--accent); font-family: var(--mono); }
 .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .seg button { padding: 5px 10px; font-size: 13px; }
@@ -230,3 +230,15 @@ dialog h2 { font-size: 16px; }
   .top { padding: 10px 16px; }
   .char-pick select { min-width: 0; }
 }
+
+/* 모션 세트 · 한 방향 다시 그리기 · 자동 점검 */
+.set-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.set-head { display: flex; flex-direction: column; gap: 2px; }
+.set-items { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.redraw select { padding: 4px 8px; }
+.sv-qa { display: grid; gap: 4px; }
+.sv-qa:empty { display: none; }
+.qa-item { text-align: left; justify-self: stretch; border-color: #5a4a2a; color: var(--warn); }
+.fr-thumb.qa-flag { border-color: var(--warn); }
+.fr-thumb.qa-flag .fr-badge { color: var(--warn); }
+.line-label.wide { width: auto; }
