@@ -237,14 +237,44 @@ def majority_clean(q, a, k, protect, min_votes=6):
     return np.where(change, top, q)
 
 
+def merge_specks(q, a, k, protect, max_size=2):
+    """max_size 픽셀 이하의 작은 색 조각(허리띠·주름 같은 HD 잔무늬가 도트에서 흩어진 점)을 둘레에서 가장 많은 색으로
+    합친다. 눈·선 같은 어두운 색(protect)과 실루엣 가장자리에 걸친 조각은 그대로 둔다."""
+    H, W = q.shape
+    out = q.copy()
+    for c in range(k):
+        if protect[c]:
+            continue
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(((q == c) & a).astype(np.uint8), connectivity=4)
+        for i in range(1, n):
+            if stats[i, cv2.CC_STAT_AREA] > max_size:
+                continue
+            ys, xs = np.nonzero(lab == i)
+            votes = np.zeros(k, np.int32)
+            inside = True
+            for y, x in zip(ys, xs):
+                for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    yy, xx = y + dy, x + dx
+                    if not (0 <= yy < H and 0 <= xx < W) or not a[yy, xx]:
+                        inside = False
+                    elif lab[yy, xx] != i:
+                        votes[q[yy, xx]] += 1
+            if inside and votes.any():
+                out[ys, xs] = votes.argmax()
+    return out
+
+
 def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=None,
-             dark_share=0.40, dark_luma=70, smooth=0, majority=True):
+             dark_share=0.40, dark_luma=70, smooth=0, majority=True, seq_len=None, hold=None, speck=3):
     """픽셀아트 마감: 공유 팔레트로 먼저 색을 정한 뒤, cluster x cluster 칸마다 가장 많은 색을 골라 줄인다
     (평균을 내지 않아 섞인 중간색이 생기지 않음). 칸 안에 어두운 색(밝기 dark_luma 미만, 눈·선)이
     dark_share 이상이면 그 색을 살린다 (sprite-gen의 detail bias와 같은 기준).
     palette_ref(원화 RGBA 목록)를 주면 팔레트를 원화에서 뽑아, 영상에서 바뀐 색을 원래 색으로 되돌린다.
     smooth>0이면 줄이기 전에 색 경계를 살리는 평탄화(mean shift, 색 반경 smooth)로 질감 잡티를 없앤다.
-    다수결로 면 안의 잡티를 정리하고, 실루엣에 1px 외곽선을 두른다."""
+    다수결로 면 안의 잡티를 정리하고, speck 픽셀 이하 작은 색 조각은 둘레 색으로 합치고, 실루엣에 1px 외곽선을 두른다.
+    seq_len: 프레임이 seq_len장씩 한 애니메이션(한 방향)이면, 앞 장과 표가 거의 같은 픽셀(차이 hold표 이내, 기본 칸의
+    30%)은 앞 장 색을 그대로 써서 장마다 색이 바뀌는 지글거림을 줄인다 (어두운 색↔밝은 색으로는 안 바꾼다).
+    2026-10-09 시험(키 64px, 대기·걷기 정면·옆): 지글거림 대기 0.164→0.121·0.109→0.066, 걷기 0.398→0.332, 눈·선 유지."""
     h0, w0 = rgba_frames[0].shape[:2]
     width = max(1, round(w0 * height / h0))
     big_w, big_h = width * cluster, height * cluster
@@ -277,7 +307,11 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
     dark = luma < dark_luma                         # 눈·선 같은 어두운 색은 살리고, 정리 대상에서 뺀다
 
     out = []
-    for rgb, m in mids:
+    hold = max(2, round(0.3 * cluster * cluster)) if hold is None else hold
+    prev = None                                      # (색 번호, 불투명) — 같은 애니메이션의 앞 장
+    for fi, (rgb, m) in enumerate(mids):
+        if seq_len and fi % seq_len == 0:
+            prev = None
         idx = np.argmin(((rgb[..., None, :] - pal_f) ** 2).sum(-1), axis=-1)
         blocks = idx.reshape(height, cluster, width, cluster).transpose(0, 2, 1, 3).reshape(height, width, -1)
         solid = m.reshape(height, cluster, width, cluster).transpose(0, 2, 1, 3).reshape(height, width, -1)
@@ -303,6 +337,16 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
             q = np.where(lone, votes.argmax(-1), q)
         if majority:
             q = majority_clean(q, a, k, dark)
+        if speck:
+            q = merge_specks(q, a, k, dark, speck)
+        if seq_len and prev is not None:             # 지글거림 줄이기: 앞 장 색이 거의 같은 표를 받았으면 그대로
+            pq, pa = prev
+            pv = np.take_along_axis(counts, pq[..., None], -1)[..., 0]
+            cv = np.take_along_axis(counts, q[..., None], -1)[..., 0]
+            keep = a & pa & (pq != q) & (pv > 0) & (pv >= cv - hold) & (dark[pq] == dark[q])
+            q = np.where(keep, pq, q)
+        if seq_len:
+            prev = (q, a)
 
         img = np.dstack([palette[q], (a * 255).astype(np.uint8)])
         if outline:

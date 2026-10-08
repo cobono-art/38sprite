@@ -386,7 +386,7 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
     if pixel_height:
         flat = [im for d in order for im in rows[d]]
         ps = pixel_height / char_px if char_px else pixel_height / (y1 - y0)
-        px, _ = pixelate(flat, max(1, round((y1 - y0) * ps)), colors, palette_ref=palette_refs, smooth=smooth)
+        px, _ = pixelate(flat, max(1, round((y1 - y0) * ps)), colors, palette_ref=palette_refs, smooth=smooth, seq_len=n)
         prow = {d: px[k * n:(k + 1) * n] for k, d in enumerate(order)}
         write_sheet(prow, order, fps, (pivot[0] * ps, pivot[1] * ps), out_dir, "sheet_px", loop,
                     game_info(done, order, kind, fps, ps, hold_end, locomotion, ground_y))
