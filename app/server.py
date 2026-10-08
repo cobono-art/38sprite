@@ -20,7 +20,7 @@ from aiohttp import web
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from spritegen import __version__, codex, comfy, export, matting  # noqa: E402
-from spritegen import comfy_launch  # noqa: E402
+from spritegen import comfy_launch, repair  # noqa: E402
 from spritegen import project as store  # noqa: E402
 from spritegen.assemble import retime, set_move_scale  # noqa: E402
 from spritegen.directions import NAME_KO, SHEET_ORDER, generated_directions, preview_layout, source_of  # noqa: E402
@@ -96,6 +96,16 @@ async def index(_):
     return web.FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store"})
 
 
+EDIT_CACHE = {"t": 0.0, "url": None}
+
+
+def edit_url(cfg, max_age=60):
+    """'이 장 효과 지우기'에 쓸 편집 AI ComfyUI (Qwen-Image 2.1 edit). 상태를 30초마다 물어서 60초 동안 기억한다."""
+    if time.time() - EDIT_CACHE["t"] > max_age:
+        EDIT_CACHE.update(t=time.time(), url=repair.find(cfg))
+    return EDIT_CACHE["url"]
+
+
 @routes.get("/api/status")
 async def status(_):
     cfg = store.load_config()
@@ -105,6 +115,7 @@ async def status(_):
                               "presets": ANGLE_PRESETS, "dir_names": NAME_KO, "effect_words": EFFECT_WORDS,
                               "pose": pose_tools() is not None, "matting": matting.enabled(),
                               "neg_node_installed": comfy_launch.node_installed(root),
+                              "edit_ok": bool(await blocking(edit_url, cfg)),
                               "comfy_local": bool(root and comfy_launch.local_port(cfg["comfy_url"])),
                               "version": __version__})
 
@@ -512,16 +523,68 @@ async def swap_frame(request):
         return bad("없는 방향이에요")
     src, _ = source_of(body["dir"], generated_directions(s["count"], s["mirror"]))
 
+    picked = (m["result"]["report"]["directions"].get(src) or {}).get("picked") or []
+    cur = picked[slot] if 0 <= slot < len(picked) else None
+
     def upd(pr):
         mm = next(x for x in pr["motions"] if x["id"] == mid)
         ov = dict(mm.get("frame_overrides") or {})
         slots = dict(ov.get(src) or {})
         if frame is None:
             slots.pop(str(slot), None)
+            if cur is not None and cur in (mm.get("repaired") or {}).get(src, []):   # 편집 AI로 고친 그림도 원래대로
+                (store.project_dir(pid) / "motions" / mid / "repaired" / src / f"{cur:05d}.png").unlink(missing_ok=True)
+                rp = dict(mm["repaired"])
+                rp[src] = [x for x in rp[src] if x != cur]
+                mm["repaired"] = rp
         else:
             slots[str(slot)] = frame
         ov[src] = slots
         mm["frame_overrides"] = ov
+    store.update(pid, upd)
+    report = await blocking(assemble_motion, pid, mid)
+    return web.json_response({"report": report})
+
+
+@routes.post("/api/projects/{pid}/motions/{mid}/repair")
+async def repair_frame(request):
+    """후처리: 한 칸의 영상 프레임에서 빛 효과를 편집 AI로 지우고 시트를 다시 만든다."""
+    pid, mid = request.match_info["pid"], request.match_info["mid"]
+    m = _done_motion(pid, mid)
+    if not m:
+        return bad("다 만든 동작만 고칠 수 있어요")
+    try:
+        body = await request.json()
+        slot = int(body["slot"])
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return bad("고칠 칸이 올바르지 않아요")
+    s = m["settings"]
+    if body.get("dir") not in SHEET_ORDER[s["count"]]:
+        return bad("없는 방향이에요")
+    src, _ = source_of(body["dir"], generated_directions(s["count"], s["mirror"]))
+    picked = (m["result"]["report"]["directions"].get(src) or {}).get("picked") or []
+    if not 0 <= slot < len(picked):
+        return bad("고칠 칸이 올바르지 않아요")
+    cfg = store.load_config()
+    url = await blocking(edit_url, cfg, 0)
+    if not url:
+        return bad("이미지 편집 AI(Qwen-Image 2.1 edit)가 있는 ComfyUI를 찾지 못했어요")
+    mdir = store.project_dir(pid) / "motions" / mid
+    frame = picked[slot]
+    files = sorted((mdir / "frames" / src).glob("*.png"))
+    if frame >= len(files):
+        return bad("그 장면의 영상 프레임이 없어요")
+    try:
+        await blocking(repair.repair_frame, files[frame], mdir / "repaired" / src / f"{frame:05d}.png", url,
+                       cfg["comfy_url"], cfg)
+    except RuntimeError as e:
+        return bad(str(e))
+
+    def upd(pr):
+        mm = next(x for x in pr["motions"] if x["id"] == mid)
+        rp = dict(mm.get("repaired") or {})
+        rp[src] = sorted(set(rp.get(src, [])) | {frame})
+        mm["repaired"] = rp
     store.update(pid, upd)
     report = await blocking(assemble_motion, pid, mid)
     return web.json_response({"report": report})

@@ -104,6 +104,11 @@ def analyze_direction(frames_dir, kind, n_frames, strip_effects=False, window=No
     matte: 빛 효과 방식(none·vivid·strip)을 주면 고른 프레임을 AI 배경 지우기(BEN v2)와 크로마키를 합쳐 딴다
     (matting.py). vivid면 캐릭터만 있는 층(body)과 빛만 있는 층(fx)도 만든다."""
     frames = load_frames(frames_dir)
+    # 편집 AI로 빛 효과를 지운 프레임이 있으면 그 프레임 대신 쓴다 (<동작>/repaired/<방향>/<프레임 번호>.png, repair.py)
+    fixed = Path(frames_dir).parent.parent / "repaired" / Path(frames_dir).name
+    for f in (sorted(fixed.glob("*.png")) if fixed.exists() else []):
+        if f.stem.isdigit() and int(f.stem) < len(frames):
+            frames[int(f.stem)] = np.asarray(Image.open(f).convert("RGB"))
     # 배경색은 프레임마다 잰다 (H3가 가끔 영상 중간에 배경색을 바꾼다)
     bgs = [estimate_bg(f) for f in frames]
     bg = bgs[0]

@@ -316,7 +316,9 @@ def capture_pose(tools, video, out):
 
 
 BODY_DIR = Path(__file__).resolve().parent / "assets" / "body"
+CHIBI = {"head": 2.0, "leg": 0.55, "arm": 0.7, "spine": 0.8, "neck": 0.6, "thick": 1.2}   # body_render.CHIBI와 같게
 BODY_MODELS = {"clay": ("Superhero_Male_FullBody.gltf", None),
+               "chibi": ("Superhero_Male_FullBody.gltf", None),     # 2~3등신: 머리 2배, 다리·팔·몸통 짧게 (body_render.CHIBI)
                "male": ("Superhero_Male_FullBody.gltf", "Hair_SimpleParted.gltf"),
                "female": ("Superhero_Female_FullBody.gltf", "Hair_Buns.gltf")}
 
@@ -334,17 +336,20 @@ def body_tools():
         return None
     body_name, hair_name = BODY_MODELS[kind]
     body = BODY_DIR / body_name
-    return (py, body, BODY_DIR / hair_name if hair_name else None) if body.exists() else None
+    chibi = "chibi" if kind == "chibi" else None
+    return (py, body, BODY_DIR / hair_name if hair_name else None, chibi) if body.exists() else None
 
 
 def render_body(tools, poses, dirs, mdir, elevation, size, scale, center, bg, name="mannequin_{d}.mp4"):
     """사람 모델을 poses대로 움직여 방향마다 mp4로 그린다 → {방향: 파일}. dirs: {방향: yaw}."""
-    py, body, hair = tools
+    py, body, hair = tools[:3]
+    chibi = tools[3] if len(tools) > 3 else None
     joints = list(poses[0])
     (mdir / "poses.json").write_text(json.dumps({"joints": joints, "frames": [[P[j].tolist() for j in joints] for P in poses]}))
     req = {"poses": str(mdir / "poses.json"), "model": str(body), "hair": str(hair) if hair and Path(hair).exists() else None,
            "out": str(mdir), "dirs": dirs, "elevation": elevation, "size": size, "scale": float(scale),
-           "center": [float(c) for c in center], "bg": list(bg), "fps": comfy.FPS, "name": name}
+           "center": [float(c) for c in center], "bg": list(bg), "fps": comfy.FPS, "name": name,
+           "chibi": CHIBI if chibi else None}
     (mdir / "body_request.json").write_text(json.dumps(req))
     proc = subprocess.run([str(py), str(Path(__file__).resolve().parent / "body_render.py"), str(mdir / "body_request.json")],
                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)

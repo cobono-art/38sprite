@@ -34,6 +34,11 @@ AIM = {"upperarm_l": ("l_shoulder", "l_elbow", "lowerarm_l"), "lowerarm_l": ("l_
        "neck_01": ("neck", "head", "Head")}
 # 몸통 뼈: 골반 방향과 가슴 방향 사이를 나눠 갖는 비율
 SPINE = {"pelvis": 0.0, "spine_01": 0.34, "spine_02": 0.67, "spine_03": 1.0}
+# 2~3등신 체형(chibi): 뼈마다 길이(자식 관절까지)와 굵기를 바꾼다. 머리는 통째로 키운다.
+SEGMENT = {"thigh_l": "leg", "thigh_r": "leg", "calf_l": "leg", "calf_r": "leg",
+           "upperarm_l": "arm", "upperarm_r": "arm", "lowerarm_l": "arm", "lowerarm_r": "arm",
+           "spine_01": "spine", "spine_02": "spine", "spine_03": "spine", "neck_01": "neck"}
+CHIBI = {"head": 2.0, "leg": 0.55, "arm": 0.7, "spine": 0.8, "neck": 0.6, "thick": 1.2}
 
 
 def _unit(v):
@@ -164,7 +169,8 @@ class Gltf:
 class Body:
     """사람 모델 하나(+머리카락)를 관절 위치로 움직인다."""
 
-    def __init__(self, model, hair=None):
+    def __init__(self, model, hair=None, chibi=None):
+        self.chibi = chibi
         self.m = Gltf(model)
         skin = self.m.g.skins[0]
         self.joints = skin.joints
@@ -186,6 +192,8 @@ class Body:
         for p in self.parts:
             if p["tex"] is not None and not Path(p["tex"]).exists():
                 p["tex"] = None
+        if chibi:                                         # 체형을 바꾸면 쉬는 자세의 관절 위치도 바뀐다
+            self.rest = self._globals(None)
         pts = np.concatenate([self._skin(p, self._rest_mats())[0] for p in self.parts])
         self.height = float(pts[:, 1].max() - pts[:, 1].min())
         g = lambda n: self.rest[self.m.names[n]][:3, 3]   # noqa: E731
@@ -193,28 +201,56 @@ class Body:
         self.rest_chest_frame = _frame(g("upperarm_l") - g("upperarm_r"), g("neck_01") - g("pelvis"))
 
     def _rest_mats(self):
-        return np.stack([self.rest[j] @ self.ibm[k] for k, j in enumerate(self.joints)])
+        return np.stack([self.rest[j] @ self._shape(j) @ self.ibm[k] for k, j in enumerate(self.joints)])
 
-    def pose(self, P):
-        """마네킹 관절 위치 → 몸 뼈마다 전역 변환 → 스키닝 행렬."""
+    def _shape(self, i):
+        """2~3등신: 이 뼈의 메시를 뼈 방향(로컬 Y)으로 늘리거나 줄이고 굵게, 머리는 통째로 키운다."""
+        if not self.chibi:
+            return np.eye(4)
+        name = self.m.g.nodes[i].name
+        S = np.eye(4)
+        if name == "Head":
+            S[:3, :3] *= self.chibi["head"]
+        elif name in SEGMENT:
+            t = self.chibi.get("thick", 1.0)
+            S[:3, :3] = np.diag([t, self.chibi[SEGMENT[name]], t])
+        return S
+
+    def _local(self, i):
+        """부모 뼈 길이를 바꾼 만큼 이 관절의 자리(부모에서 본 위치)도 옮긴다."""
+        L = self.m.local[i]
+        parent = self.m.parent.get(i)
+        if self.chibi and parent is not None and self.m.g.nodes[parent].name in SEGMENT:
+            L = L.copy()
+            L[:3, 3] *= self.chibi[SEGMENT[self.m.g.nodes[parent].name]]
+        return L
+
+    def _globals(self, P):
+        """관절마다 전역 변환. P(마네킹 관절 위치)를 주면 몸통·팔다리를 그 방향으로 돌린다."""
         names = self.m.g.nodes
-        dp = _frame(P["l_hip"] - P["r_hip"], P["chest"] - P["pelvis"]) @ self.rest_pelvis_frame.T
-        dc = _frame(P["l_shoulder"] - P["r_shoulder"], P["neck"] - P["pelvis"]) @ self.rest_chest_frame.T
+        if P is not None:
+            dp = _frame(P["l_hip"] - P["r_hip"], P["chest"] - P["pelvis"]) @ self.rest_pelvis_frame.T
+            dc = _frame(P["l_shoulder"] - P["r_shoulder"], P["neck"] - P["pelvis"]) @ self.rest_chest_frame.T
         G = {}
         for i in self.order:
             parent = self.m.parent.get(i)
-            M = (G[parent] if parent is not None else np.eye(4)) @ self.m.local[i]
+            M = (G[parent] if parent is not None else np.eye(4)) @ self._local(i)
             name = names[i].name
-            if name in SPINE:
+            if P is not None and name in SPINE:
                 M = M.copy()
                 M[:3, :3] = _slerp(dp, dc, SPINE[name]) @ self.rest[i][:3, :3]
-            elif name in AIM:
+            elif P is not None and name in AIM:
                 a, b, child = AIM[name]
-                cur = M[:3, :3] @ self.m.local[self.m.names[child]][:3, 3]
+                cur = M[:3, :3] @ self._local(self.m.names[child])[:3, 3]
                 M = M.copy()
                 M[:3, :3] = _rot_between(cur, P[b] - P[a]) @ M[:3, :3]
             G[i] = M
-        return np.stack([G[j] @ self.ibm[k] for k, j in enumerate(self.joints)]), G
+        return G
+
+    def pose(self, P):
+        """마네킹 관절 위치 → 몸 뼈마다 전역 변환 → 스키닝 행렬."""
+        G = self._globals(P)
+        return np.stack([G[j] @ self._shape(j) @ self.ibm[k] for k, j in enumerate(self.joints)]), G
 
     def _skin(self, p, mats, own=None):
         M = mats[p["jmap"]] if own is None else own
@@ -308,7 +344,7 @@ def main():
     data = json.loads(Path(req["poses"]).read_text(encoding="utf-8"))
     names = data["joints"]
     poses = [{n: np.asarray(v, float) for n, v in zip(names, f)} for f in data["frames"]]
-    body = Body(req["model"], req.get("hair"))
+    body = Body(req["model"], req.get("hair"), req.get("chibi"))
     scale = req["scale"] * MANNEQUIN_HEIGHT / body.height
     skinned = [body.skinned(P) for P in poses]
     ren = Renderer(req["size"])

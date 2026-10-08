@@ -1070,6 +1070,10 @@ function setupFrames(frag, p, m, player) {
   const cands = $(".fr-cands", picker), msg = $(".fr-msg", picker);
   let slot = -1, openDir = null;
   const changed = (d, k) => String(k) in (((m.frame_overrides || {})[gen.includes(d) ? d : MIRROR[d]]) || {});
+  const repaired = (d, k) => {                       // 편집 AI로 효과를 지운 칸
+    const src = gen.includes(d) ? d : MIRROR[d], rep = m.result.report.directions[src] || {};
+    return ((m.repaired || {})[src] || []).includes((rep.picked || [])[k]);
+  };
   const flagged = d => new Set((m.result.report.qa || []).filter(q => q.dir === (gen.includes(d) ? d : MIRROR[d]))
     .flatMap(q => q.frames || []));
 
@@ -1092,6 +1096,7 @@ function setupFrames(frag, p, m, player) {
       ctx.drawImage(player.img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
       b.append(c, el("span", "fr-num", String(k + 1)));
       if (changed(d, k)) { b.classList.add("changed"); b.append(el("span", "fr-badge", "바꿈")); }
+      else if (repaired(d, k)) { b.classList.add("changed"); b.append(el("span", "fr-badge", "고침")); }
       else if (qa.has(k)) { b.classList.add("qa-flag"); b.append(el("span", "fr-badge", "확인")); }
       b.addEventListener("click", () => open(k));
       return b;
@@ -1104,6 +1109,7 @@ function setupFrames(frag, p, m, player) {
     openDir = d;
     picker.hidden = false;
     picker.removeAttribute("aria-busy");
+    $(".fr-repair", picker).hidden = !(state.status && state.status.edit_ok);   // 편집 AI가 켜졌는지는 열 때마다 본다
     msg.textContent = "";
     render();
     $(".fr-picker-title", picker).textContent = `${ARROWS[d]} ${d} ${k + 1}번째 장을 바꿀 장면을 고르세요`;
@@ -1153,6 +1159,23 @@ function setupFrames(frag, p, m, player) {
   }
 
   $(".fr-close", picker).addEventListener("click", () => { picker.hidden = true; slot = -1; render(); });
+  /* 이 장 효과 지우기: 편집 AI(Qwen-Image)가 있는 ComfyUI가 있을 때만. 그 장의 영상 프레임에서 빛 효과만 지운다 */
+  const fix = $(".fr-repair", picker);
+  fix.hidden = !(state.status && state.status.edit_ok);
+  fix.addEventListener("click", async () => {
+    if (slot < 0) return;
+    picker.setAttribute("aria-busy", "true");
+    msg.className = "small muted fr-msg";
+    msg.textContent = "편집 AI가 이 장의 빛 효과를 지우는 중… 시트까지 다시 만들어서 1분쯤 걸려요";
+    try {
+      await postJSON(`/api/projects/${p.id}/motions/${m.id}/repair`, { dir: openDir, slot });
+      await refreshProject();
+    } catch (e) {
+      picker.removeAttribute("aria-busy");
+      msg.className = "small error fr-msg";
+      msg.textContent = e.message;
+    }
+  });
   $(".fr-reset", picker).addEventListener("click", () => { if (slot >= 0) apply(openDir, slot, null); });
   return { render };
 }
