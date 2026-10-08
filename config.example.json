@@ -1,0 +1,15 @@
+{
+  "comfy_url": "http://127.0.0.1:8189",
+  "port": 7870,
+  "video_backend": "h3",
+  "workflow_dir": "workflows",
+  "models": {
+    "i2v": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+    "r2v": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "turbo_i2v": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+    "turbo_r2v": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+    "clip": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "video_vae": "minimax_h3_video_vae_int8_convrot.safetensors",
+    "audio_vae": "minimax_h3_audio_vae_fp32.safetensors"
+  }
+}

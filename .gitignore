@@ -1,0 +1,17 @@
+# 실행하면 생기는 것
+projects/
+config.json
+python_path.txt
+
+# 파이썬
+__pycache__/
+*.pyc
+
+# 사용자 워크플로 (예시 파일은 올림)
+workflows/i2v.json
+workflows/r2v.json
+
+# 기타
+*.log
+.DS_Store
+Thumbs.db

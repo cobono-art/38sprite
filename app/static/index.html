@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>38Sprite</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-left">
+    <span class="brand">38Sprite</span>
+    <label class="char-pick" id="char-pick" hidden><span>캐릭터</span>
+      <select id="project-select"></select>
+    </label>
+  </div>
+  <div class="status">
+    <span class="chip" id="st-comfy" title="영상 AI (ComfyUI)">영상 AI 확인 중…</span>
+    <span class="chip" id="st-codex" title="Codex 이미지 생성">Codex 확인 중…</span>
+    <button type="button" class="ghost" id="btn-config">연결 설정</button>
+  </div>
+</header>
+
+<section class="empty" id="view-empty" hidden>
+  <h1>캐릭터 삼면도를 올려서 시작하세요</h1>
+  <ol class="steps">
+    <li><b>삼면도 올리기:</b> 앞·옆·뒤가 한 장에 있는 그림</li>
+    <li><b>보기 설정:</b> 보는 각도, 8·4·2방향, HD 또는 픽셀아트</li>
+    <li><b>방향 그림:</b> Codex가 그 각도로 방향별 그림을 그려요. 마음에 안 들면 다시 그리기</li>
+    <li><b>동작 만들기:</b> 텍스트 설명이나 레퍼런스 영상 → 영상 AI가 방향마다 영상을 만들고 스프라이트 시트로 정리해요</li>
+  </ol>
+  <p class="muted">필요한 것: Codex 로그인, 영상 AI(기본: MiniMax H3)가 깔린 ComfyUI(켜 둔 상태)</p>
+  <button type="button" class="primary big" id="btn-new-empty">+ 새 캐릭터</button>
+</section>
+
+<div class="shell" id="view-project" hidden>
+  <aside class="opts" aria-label="옵션">
+    <section class="char">
+      <button type="button" class="thumb-btn turn-btn" id="p-turn-btn" aria-label="삼면도 크게 보기"><img id="p-turn" alt="삼면도"></button>
+      <div class="char-text">
+        <div class="char-name" id="p-name"></div>
+        <div class="muted small" id="p-meta"></div>
+      </div>
+    </section>
+
+    <section class="group" aria-labelledby="h-view">
+      <h2 id="h-view"><span class="num">1</span>보기 설정</h2>
+      <div class="line"><span>보는 각도</span><span class="value" id="angle-value"></span></div>
+      <div class="seg" id="angle-presets"></div>
+      <input type="range" id="angle" min="0" max="80" step="5" aria-label="보는 각도(도)">
+      <div class="line">
+        <span class="line-label">방향</span>
+        <div class="seg" id="count-seg">
+          <button type="button" data-count="8">8</button>
+          <button type="button" data-count="4">4</button>
+          <button type="button" data-count="2">2</button>
+        </div>
+        <label class="check" title="생성 시간을 아끼는 대신, 무기 든 손이 반대로 바뀌어요"><input type="checkbox" id="mirror" aria-label="왼쪽 방향은 오른쪽을 좌우 반전해서 채우기"> 왼쪽은 반전</label>
+      </div>
+      <p class="muted small" id="plan-text"></p>
+      <div class="line">
+        <span class="line-label">스타일</span>
+        <div class="seg" id="style-seg">
+          <button type="button" data-style="hd">HD</button>
+          <button type="button" data-style="pixel">픽셀아트</button>
+        </div>
+        <label class="field inline" id="pixel-size-wrap"><span>키</span>
+          <select id="pixel-height"><option value="48">48px</option><option value="64">64px</option><option value="80">80px</option><option value="96">96px</option><option value="128">128px</option></select>
+        </label>
+      </div>
+      <p class="error small" id="settings-error" hidden></p>
+    </section>
+
+    <section class="group" aria-labelledby="h-sheet">
+      <h2 id="h-sheet"><span class="num">2</span>방향 그림</h2>
+      <div class="sheet-row">
+        <button type="button" class="thumb-btn sheet-btn" id="sheet-btn" aria-label="방향 그림 크게 보기">
+          <img id="sheet-img" alt="방향 그림" hidden><span class="sheet-empty" id="sheet-empty">아직 없어요</span>
+        </button>
+        <div class="sheet-side">
+          <p class="small" id="sheet-state"></p>
+          <button type="button" class="primary" id="btn-sheet">Codex로 그리기</button>
+          <label class="button ghost">직접 올리기<input type="file" id="sheet-file" accept="image/png,image/jpeg,image/webp" hidden></label>
+        </div>
+      </div>
+      <div class="job" id="sheet-job" hidden><div class="bar"><i></i></div><span class="job-msg"></span></div>
+      <p class="warn" id="sheet-warn" hidden></p>
+      <div class="history" id="sheet-history"></div>
+    </section>
+
+    <section class="group" aria-labelledby="h-motion">
+      <h2 id="h-motion"><span class="num">3</span>동작 만들기</h2>
+      <form id="form-motion" class="form">
+        <div class="seg" id="source-seg">
+          <button type="button" data-source="text" aria-pressed="true">텍스트 설명</button>
+          <button type="button" data-source="video" aria-pressed="false">레퍼런스 영상</button>
+        </div>
+        <label class="field" id="text-wrap"><span>동작 설명</span>
+          <textarea id="m-text" rows="3" placeholder="예: 걷기 / 오른손 검을 머리 위로 치켜들었다가 대각선으로 내려베기"></textarea>
+        </label>
+        <label class="field" id="video-wrap" hidden><span>레퍼런스 영상 (사람이 동작하는 영상, 앞 5초만 써요)</span>
+          <input type="file" id="m-video" accept="video/*">
+        </label>
+        <div class="seg" id="kind-seg">
+          <button type="button" data-kind="loop" aria-pressed="true">반복 동작 (걷기·대기)</button>
+          <button type="button" data-kind="oneshot" aria-pressed="false">한 번 하는 동작 (공격·피격)</button>
+        </div>
+        <div class="line">
+          <label class="field inline"><span>프레임</span>
+            <select id="m-frames"><option>6</option><option selected>8</option><option>10</option><option>12</option><option>16</option></select>
+          </label>
+          <label class="field inline grow"><span>이름</span><input id="m-name" maxlength="30" placeholder="비우면 설명에서"></label>
+        </div>
+        <fieldset class="modes" id="mode-cards">
+          <legend>방향 맞추는 방식</legend>
+          <label class="mode" data-mode="mannequin">
+            <input type="radio" name="mode" value="mannequin">
+            <span class="mode-text"><b>3D 마네킹</b><span class="mode-desc">Codex가 짠 3D 동작을 방향마다 그 각도에서 따라 해요. 손·궤적·박자가 가장 잘 맞아요.</span><span class="mode-note" hidden>레퍼런스 영상에서는 못 써요</span></span>
+          </label>
+          <label class="mode" data-mode="master">
+            <input type="radio" name="mode" value="master">
+            <span class="mode-text"><b>마스터 먼저</b><span class="mode-desc">한 방향을 먼저 보여 드리고, 고른 영상을 나머지 방향이 따라 해요. 느려요.</span></span>
+          </label>
+          <label class="mode" data-mode="direct">
+            <input type="radio" name="mode" value="direct">
+            <span class="mode-text"><b>방향별 바로</b><span class="mode-desc">방향마다 따로 만들어요. 걷기·대기처럼 단순한 동작에 빠르고 충분해요.</span></span>
+          </label>
+        </fieldset>
+        <label class="check" title="끄면 영상 AI가 반짝이·빛 궤적 같은 효과를 화려하게 살려서 그려요"><input type="checkbox" id="m-fx" checked> 빛 이펙트 지우기 (끄면 화려한 효과를 살려요)</label>
+        <p class="error" id="motion-error" hidden></p>
+        <button type="submit" class="primary big" id="btn-motion">동작 만들기</button>
+        <p class="muted small center" id="motion-eta"></p>
+      </form>
+    </section>
+  </aside>
+
+  <main class="results" aria-label="결과">
+    <div class="results-bar">
+      <div class="tabs" id="motion-tabs" role="tablist" aria-label="동작"></div>
+      <div class="exports" id="exports" hidden>
+        <a class="button" id="ex-zip" download>ZIP 받기</a>
+        <a class="button ghost" id="ex-gif" download>GIF</a>
+        <a class="button ghost" id="ex-png" download>시트 PNG</a>
+        <a class="button ghost" id="ex-json" download>JSON</a>
+      </div>
+    </div>
+    <div class="motion-view" id="motion-view" role="tabpanel"></div>
+    <div class="activity" id="activity"></div>
+  </main>
+</div>
+
+<dialog id="dlg-new">
+  <form id="form-new" class="form">
+    <h2>새 캐릭터</h2>
+    <label class="field"><span>이름</span><input id="new-name" name="name" placeholder="예: 빨간머리 모험가" maxlength="40"></label>
+    <label class="drop" id="new-drop">
+      <input type="file" id="new-file" name="file" accept="image/png,image/jpeg,image/webp">
+      <span id="new-drop-text">삼면도 이미지를 끌어다 놓거나 눌러서 고르세요 (PNG·JPG)</span>
+      <img id="new-preview" alt="" hidden>
+    </label>
+    <p class="error" id="new-error" hidden></p>
+    <div class="row"><button type="submit" class="primary">만들기</button><button type="button" class="ghost" id="new-cancel">취소</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-config">
+  <form method="dialog" id="form-config" class="form">
+    <h2>연결 설정</h2>
+    <label class="field"><span>ComfyUI 주소 (영상 AI 모델이 있는 ComfyUI)</span><input id="cfg-url" placeholder="http://127.0.0.1:8189"></label>
+    <div id="cfg-detail" class="muted small"></div>
+    <div class="row"><button type="submit" class="primary" value="save">저장</button><button type="submit" class="ghost" value="cancel">닫기</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-image" class="image-dlg">
+  <form method="dialog">
+    <img id="dlg-image-img" alt="">
+    <div class="row end"><button type="submit" class="ghost">닫기</button></div>
+  </form>
+</dialog>
+
+<template id="tpl-player">
+  <div class="stage-wrap">
+    <div class="stage"><canvas></canvas></div>
+    <aside class="stage-side">
+      <div><div class="sv-title"></div><div class="muted small sv-sub"></div></div>
+      <div class="dpad" aria-label="방향 고르기"></div>
+      <div class="seg small sv-view"><button type="button" data-view="all" aria-pressed="true">전체</button><button type="button" data-view="one" aria-pressed="false">한 방향</button></div>
+      <div class="seg small sv-res"><button type="button" data-res="hd" aria-pressed="true">HD</button><button type="button" data-res="px" aria-pressed="false">픽셀</button></div>
+      <div class="seg small sv-bg"><button type="button" data-bg="dark" aria-pressed="true">어둡게</button><button type="button" data-bg="light" aria-pressed="false">밝게</button><button type="button" data-bg="checker" aria-pressed="false">체크</button></div>
+      <div class="speed">
+        <div class="line"><span>재생 속도</span><span class="speed-val sv-speed-val"></span></div>
+        <input type="range" class="sv-speed" min="0.5" max="4" step="0.1" value="1" aria-label="재생 속도 (원래 속도의 몇 배)">
+        <div class="line"><span class="muted small sv-speed-orig"></span><button type="button" class="ghost small sv-speed-reset">원래대로</button></div>
+        <span class="small muted sv-speed-msg" aria-live="polite"></span>
+      </div>
+      <dl class="stats"></dl>
+      <p class="muted small sv-text"></p>
+      <p class="error small sv-error" hidden></p>
+    </aside>
+  </div>
+  <section class="frames" aria-label="장면 바꾸기">
+    <div class="frames-head">
+      <span class="fr-title"></span>
+      <span class="muted small">이상한 장을 누르면 영상의 앞뒤 장면 중에서 골라 바꿀 수 있어요</span>
+    </div>
+    <div class="fr-strip"></div>
+    <div class="fr-picker" hidden>
+      <div class="frames-head"><b class="fr-picker-title"></b><span class="muted small fr-picker-note"></span></div>
+      <div class="fr-cands"></div>
+      <div class="row wrap">
+        <button type="button" class="ghost fr-reset">원래 장면으로</button>
+        <button type="button" class="ghost fr-close">닫기</button>
+        <span class="small fr-msg" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+  <details class="raw"><summary>원본 영상</summary><div class="raw-row"></div></details>
+</template>
+
+<template id="tpl-progress">
+  <section class="progress-card">
+    <img class="pc-thumb" alt="" hidden>
+    <div class="pc-body">
+      <div class="pc-head"><b class="pc-title"></b><span class="job-msg"></span></div>
+      <div class="bar"><i></i></div>
+      <div class="parts"></div>
+      <div class="raw-row" hidden></div>
+    </div>
+    <div class="pc-actions">
+      <button type="button" class="ghost pc-open" hidden>보기</button>
+      <button type="button" class="ghost pc-cancel">중지</button>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-review">
+  <div class="stage-wrap">
+    <div class="stage review-stage"><img class="rv-img" alt=""></div>
+    <aside class="stage-side">
+      <div class="sv-title rv-title"></div>
+      <p class="rv-text"></p>
+      <button type="button" class="primary rv-go"></button>
+      <button type="button" class="ghost rv-again"></button>
+      <p class="error small rv-error" hidden></p>
+    </aside>
+  </div>
+</template>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

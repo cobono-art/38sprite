@@ -1,0 +1,176 @@
+{
+ "m_unet": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "m_clip": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+   "type": "minimax",
+   "device": "default"
+  }
+ },
+ "m_vae": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+  }
+ },
+ "m_avae": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+  }
+ },
+ "r_img": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "{{REF_IMAGE}}"
+  }
+ },
+ "r_video": {
+  "class_type": "LoadVideo",
+  "inputs": {
+   "file": "{{REF_VIDEO}}"
+  }
+ },
+ "r_parts": {
+  "class_type": "GetVideoComponents",
+  "inputs": {
+   "video": [
+    "r_video",
+    0
+   ]
+  }
+ },
+ "r_cond": {
+  "class_type": "MiniMaxH3ReferenceToVideo",
+  "inputs": {
+   "clip": [
+    "m_clip",
+    0
+   ],
+   "vae": [
+    "m_vae",
+    0
+   ],
+   "audio_vae": [
+    "m_avae",
+    0
+   ],
+   "prompt": "{{PROMPT}}",
+   "width": "{{WIDTH}}",
+   "height": "{{HEIGHT}}",
+   "length": "{{LENGTH}}",
+   "ref_image_size": "match",
+   "ref_images.ref_image_0": [
+    "r_img",
+    0
+   ],
+   "ref_videos.ref_video_0": [
+    "r_parts",
+    0
+   ]
+  }
+ },
+ "m_turbo": {
+  "class_type": "LoraLoaderModelOnly",
+  "inputs": {
+   "model": [
+    "m_unet",
+    0
+   ],
+   "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+   "strength_model": 1.0
+  }
+ },
+ "s_sampler": {
+  "class_type": "KSamplerSelect",
+  "inputs": {
+   "sampler_name": "res_multistep"
+  }
+ },
+ "s_sched": {
+  "class_type": "BasicScheduler",
+  "inputs": {
+   "model": [
+    "m_turbo",
+    0
+   ],
+   "scheduler": "simple",
+   "steps": "{{STEPS}}",
+   "denoise": 1.0
+  }
+ },
+ "s_noise": {
+  "class_type": "RandomNoise",
+  "inputs": {
+   "noise_seed": "{{SEED}}"
+  }
+ },
+ "s_guider": {
+  "class_type": "BasicGuider",
+  "inputs": {
+   "model": [
+    "m_turbo",
+    0
+   ],
+   "conditioning": [
+    "r_cond",
+    0
+   ]
+  }
+ },
+ "s_run": {
+  "class_type": "SamplerCustomAdvanced",
+  "inputs": {
+   "noise": [
+    "s_noise",
+    0
+   ],
+   "guider": [
+    "s_guider",
+    0
+   ],
+   "sampler": [
+    "s_sampler",
+    0
+   ],
+   "sigmas": [
+    "s_sched",
+    0
+   ],
+   "latent_image": [
+    "r_cond",
+    1
+   ]
+  }
+ },
+ "s_decode": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "s_run",
+    0
+   ],
+   "vae": [
+    "m_vae",
+    0
+   ]
+  }
+ },
+ "s_save": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "s_decode",
+    0
+   ],
+   "filename_prefix": "{{PREFIX}}"
+  }
+ }
+}
