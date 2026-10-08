@@ -130,6 +130,7 @@ https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
 | `models` | (H3 기본 파일 이름) | H3 모델 파일 이름이 다를 때만 |
 | `matting` | `auto` | AI 배경 지우기: `auto`(모델이 있으면 씀) 또는 `off` |
 | `matting_dir` | `models/ben2` | BEN v2 파일(`BEN2.py`, `model.safetensors`)이 있는 폴더 |
+| `turbo_steps` | `6` | 방향별 바로 모드의 영상 생성 단계 수 (8이면 예전과 같고 약 25% 느림, 4는 배경에 잡티가 남음) |
 | `bg_retry` | `2` | 영상 AI가 배경색을 바꿨을 때 새 시드로 다시 만들 횟수 (0이면 안 함) |
 | `mannequin_bg` | `magenta` | 3D 마네킹 모드 배경: `magenta` 또는 예전 방식 `gray` |
 

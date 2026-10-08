@@ -36,6 +36,19 @@ class PipelineHelpersTest(unittest.TestCase):
         self.assertEqual(wf, wf2)
         self.assertIsNone(pl._reseed({"n": {"inputs": {"x": 1}}}))
 
+    def test_turbo_steps_setting(self):
+        from spritegen import project
+        steps = lambda wf: wf["s_sched"]["inputs"]["steps"]   # noqa: E731
+        saved = project.load_config
+        try:
+            project.load_config = lambda: {}
+            self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x")), 6)
+            self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x", turbo=False)), 20)
+            project.load_config = lambda: {"turbo_steps": 8}
+            self.assertEqual(steps(comfy.i2v_workflow("a.png", "a.png", "walk", 640, 640, 73, 1, "x")), 8)
+        finally:
+            project.load_config = saved
+
     def test_find_server_prefers_h3(self):
         alive = {"http://127.0.0.1:8188": False, "http://127.0.0.1:8189": True}   # 8188은 켜져 있지만 H3 모델 없음
         h3 = comfy.DEFAULT_MODELS["i2v"]

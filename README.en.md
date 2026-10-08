@@ -146,6 +146,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `models` | (default H3 file names) | Only if your H3 model files are named differently |
 | `matting` | `auto` | AI matting: `auto` (use the model if present) or `off` |
 | `matting_dir` | `models/ben2` | Folder with the BEN v2 files (`BEN2.py`, `model.safetensors`) |
+| `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
 | `bg_retry` | `2` | How many times to regenerate with a new seed when the video AI changes the background color (0 = never) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
 

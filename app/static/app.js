@@ -8,7 +8,7 @@ const DEFAULT_PRESETS = [
   { label: "정면 눈높이", deg: 0 }, { label: "쿼터뷰 30°", deg: 30 },
   { label: "높은 쿼터뷰 45°", deg: 45 }, { label: "탑다운 60°", deg: 60 },
 ];
-const SEC_PER_DIR = { text: 160, video: 720, mannequin: 200, follow: 720 };
+const SEC_PER_DIR = { text: 125, video: 720, mannequin: 200, follow: 720 };
 const STATUS_LABEL = { running: "만드는 중", done: "완료", error: "실패", cancelled: "중지됨", interrupted: "중단됨",
   review: "마스터 확인", keys_review: "마네킹 확인" };
 const MODE_LABEL = { mannequin: "3D 마네킹", master: "마스터 먼저", direct: "방향별 바로" };
@@ -545,7 +545,7 @@ const shortClip = (kind, mode, source, holdEnd) => source !== "video" && !holdEn
   && ((kind === "loop" && mode === "direct") || (kind === "oneshot" && mode === "mannequin"));
 const dirSec = (kind, mode, source, holdEnd) => {
   if (mode === "mannequin") return shortClip(kind, mode, source, holdEnd) ? 120 : SEC_PER_DIR.mannequin;
-  return shortClip(kind, mode, source, holdEnd) ? 110 : SEC_PER_DIR[source] || SEC_PER_DIR.text;
+  return shortClip(kind, mode, source, holdEnd) ? 85 : SEC_PER_DIR[source] || SEC_PER_DIR.text;   // 터보 6단계 기준
 };
 
 function updateSetEta() {
