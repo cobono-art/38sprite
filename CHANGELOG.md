@@ -3,6 +3,26 @@
 버전은 [깃허브 릴리스](https://github.com/cobono-art/38sprite/releases) 태그와 같습니다. 앱 화면 왼쪽 위에서 지금 버전을 볼 수 있어요.
 Versions match the [GitHub release](https://github.com/cobono-art/38sprite/releases) tags. The app shows its version at the top left.
 
+## v0.3.0 — 2026-10-08
+
+**화면 간소화 / Simpler screen**
+- 지금 배치는 그대로 두고 자주 안 쓰는 것만 접었습니다.
+  - 보기 설정: 방향 그림이 생기면 한 줄 요약으로 접힙니다('바꾸기'로 펼침).
+  - 방향 그림: 직접 올리기·한 방향만 다시 그리기·예전 그림을 작은 링크로. 앞뒤가 바뀐 칸이 있으면 다시 그리기 줄이 바로 보입니다.
+  - 동작 만들기: 프레임·이름·방향 맞추는 방식·빛 효과를 '고급 옵션'으로 접고, 지금 값을 한 줄로 보여 줍니다.
+  - 세트: '기본 동작 한 번에 만들기' 버튼 하나와 '동작 고르기' 링크.
+  - 받기: 버튼 5개를 '받기 ▾' 메뉴 하나로.
+  - 재생기: 해상도·배경·정보를 '정보 · 보기 설정' 안으로.
+- Same layout, but rarely used controls are folded away: view settings collapse to a one-line summary once a drawing
+  exists; upload / redraw one direction / earlier drawings become small links; frames, mode and light effects move under
+  "Advanced" with a one-line summary; the five download buttons become one "Download ▾" menu; player display options
+  and stats move into "Info · display".
+
+**3D 마네킹 / 3D mannequin**
+- 마네킹 영상에 든 막대(무기)를 그리지 않습니다. 그리면 지팡이를 든 캐릭터도 칼을 든 모습으로 바뀌었습니다(실험: 막대 있음 4개 중 2개, 없음 0개). 칼끝까지 화면에 들어오게 하는 크기 계산에는 그대로 씁니다.
+- The mannequin video no longer shows the held prop (it made staff-wielding characters draw a sword); the prop is still
+  used to size the frame.
+
 ## v0.2.1 — 2026-10-08
 
 **처음 쓰는 사람 설치 / First-time setup**
