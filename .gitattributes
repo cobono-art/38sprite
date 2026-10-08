@@ -2,3 +2,5 @@
 *.bat text eol=crlf
 *.gif binary
 *.png binary
+*.mp4 binary
+*.webp binary

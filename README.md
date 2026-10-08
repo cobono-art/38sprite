@@ -4,9 +4,13 @@
 
 이름의 38은 **3면도 → 8방향**이라는 뜻입니다.
 
-![8방향 걷기 예시](docs/demo_walk8.gif)
+[![38Sprite 홍보 영상 하이라이트](docs/promo_highlight.webp)](docs/38sprite_promo.mp4)
 
-<!-- 홍보영상 링크나 다른 결과 GIF를 여기에 더 넣어도 좋아요. -->
+▶ **[홍보 영상 전체 보기 (1분 7초, 소리 있음)](docs/38sprite_promo.mp4)**: 영상 속 캐릭터 동작은 모두 38Sprite로 만든 결과물입니다.
+
+실제 결과물 예시(8방향 걷기 시트):
+
+![8방향 걷기 예시](docs/demo_walk8.gif)
 
 ## 할 수 있는 것
 
