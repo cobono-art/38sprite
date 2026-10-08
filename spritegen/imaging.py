@@ -327,28 +327,40 @@ def save_sheet(frames_rgba, fps, pivot, direction, out_dir, name):
 
 
 def save_gif(frames_rgba, fps, path, scale=1, bg=(48, 52, 60), transparent=False):
-    """transparent=True면 배경을 투명하게 (GIF는 반투명이 없어서 알파 50% 기준으로 자른다)."""
-    imgs = []
+    """모든 프레임이 팔레트 하나를 같이 쓴다 (프레임마다 따로 뽑으면 같은 얼굴이 프레임마다 다른 색으로 깜빡인다).
+    transparent=True면 배경을 투명하게 (GIF는 반투명이 없어서 알파 50% 기준으로 자른다)."""
+    rgbs, holes = [], []
     for im in frames_rgba:
         rgba = Image.fromarray(im)
         if scale != 1:
             rgba = rgba.resize((rgba.width * scale, rgba.height * scale), Image.NEAREST)
         if transparent:
-            key = (255, 0, 255)
-            arr = np.asarray(rgba).copy()
-            hole = arr[..., 3] < 128
-            arr[hole, :3] = key
-            pal = Image.fromarray(arr[..., :3]).quantize(255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-            idx = np.asarray(pal).copy()
-            idx[hole] = 255                            # 투명 전용 칸 (색은 0~254만 씀)
-            out = Image.fromarray(idx.astype(np.uint8), "P")
-            out.putpalette((pal.getpalette() + [0] * 768)[:765] + list(key))
-            out.info["transparency"] = 255
-            imgs.append(out)
+            arr = np.asarray(rgba)
+            holes.append(arr[..., 3] < 128)
+            rgbs.append(arr[..., :3])
         else:
             base = Image.new("RGBA", rgba.size, bg + (255,))
             base.alpha_composite(rgba)
-            imgs.append(base.convert("RGB"))
+            rgbs.append(np.asarray(base.convert("RGB")))
+    if transparent:                                    # 팔레트는 보이는 색만 모아서 한 번 만든다
+        px = np.concatenate([rgb[~hole] for rgb, hole in zip(rgbs, holes)])
+    else:
+        px = np.concatenate([rgb.reshape(-1, 3) for rgb in rgbs])
+    if len(px) == 0:
+        px = np.array([bg], np.uint8)
+    px = px[::max(1, len(px) // 500_000)]
+    px = np.concatenate([px, np.repeat(px[-1:], (-len(px)) % 1024, axis=0)]).reshape(-1, 1024, 3)
+    pal = Image.fromarray(px).quantize(255 if transparent else 256, method=Image.Quantize.MEDIANCUT,
+                                       dither=Image.Dither.NONE)
+    key = (255, 0, 255)
+    imgs = []
+    for i, rgb in enumerate(rgbs):
+        out = Image.fromarray(rgb).quantize(palette=pal, dither=Image.Dither.NONE)
+        if transparent:                                # 투명 전용 칸 255 (색은 0~254만 씀)
+            out.paste(255, mask=Image.fromarray(holes[i].astype(np.uint8) * 255))
+            out.putpalette((pal.getpalette() + [0] * 768)[:765] + list(key))
+            out.info["transparency"] = 255
+        imgs.append(out)
     extra = {"transparency": 255, "disposal": 2} if transparent else {}
     imgs[0].save(path, save_all=True, append_images=imgs[1:], duration=round(1000 / fps), loop=0, **extra)
 
