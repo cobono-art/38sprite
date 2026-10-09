@@ -761,8 +761,10 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
 
     fresh = not only and phase in ("all", "master", "mannequin")
     size = motion_frame_size(m, fresh)
+    # 방향별 키 맞추기: 새로 만드는 동작부터 (예전 동작을 한 방향만 다시 만들 때는 다른 방향과 맞게 예전처럼)
+    even = bool(store.load_config().get("even_height", True)) if fresh else bool(m.get("even_height"))
     if fresh:
-        _set_motion(pid, mid, frame_size=list(size))
+        _set_motion(pid, mid, frame_size=list(size), even_height=even)
 
     job.message = "방향별 첫 프레임 만드는 중"
     sheet_file = m.get("sheet", p["sheet"]["file"])
@@ -777,7 +779,7 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
     gray = mannequin and mannequin_bg() != KEY_MAGENTA
     firsts, meta = first_frames(sheet_rgb, gen, size, char_height=char_h, bottom_margin=bottom,
                                 resample=Image.NEAREST if s["style"] == "pixel" else Image.LANCZOS,
-                                bg_color=None if gray else KEY_MAGENTA)
+                                bg_color=None if gray else KEY_MAGENTA, even_height=even)
     meta["char_px"] = char_h * size[1]
     (mdir / "first").mkdir(parents=True, exist_ok=True)
     for d, im in firsts.items():

@@ -160,9 +160,24 @@ def cutout(src, cells, masks, name, scale, resample=Image.LANCZOS):
     return crop.resize(size, resample), alpha.resize(size, resample)
 
 
+def body_height(mask, frac=0.25):
+    """캐릭터 몸 키(px): 너비가 가장 넓은 줄의 frac 이상인 줄이 처음 나오는 곳 ~ 발끝. 머리 위로 삐져나온 지팡이 끝처럼
+    가는 부분은 키에 넣지 않는다."""
+    w = mask.sum(1).astype(float)
+    rows = np.where(w > 0)[0]
+    if not len(rows):
+        return 0
+    return int(rows[-1] - np.where(w >= frac * w.max())[0][0] + 1)
+
+
 def first_frames(sheet_rgb, dirs, size=(640, 640), char_height=0.72, bottom_margin=0.12, scale_from=None,
-                 resample=Image.LANCZOS, bg_color=None):
+                 resample=Image.LANCZOS, bg_color=None, even_height=False, max_fix=0.08, max_spread=1.15):
     """방향마다 같은 배율·같은 발 높이로 캐릭터를 배치한 첫 프레임을 만든다.
+
+    even_height: 방향마다 몸 키를 중앙값에 맞춘다(최대 ±max_fix). Codex는 방향마다 캐릭터를 조금씩 다른 크기로 그려서
+    (2026-10-09 시트 9장: 중앙값 대비 0.94~1.06, 74칸 도트면 3~4칸) 게임에서 방향을 틀면 캐릭터가 커졌다 작아졌다.
+    고치는 건 max_fix까지, 방향 간 키 차이가 max_spread배를 넘으면(사람형 시트는 1.05~1.10배, 몸을 숙인 늑대인간은
+    옆모습이 원래 작아서 1.28배) 생김새가 원래 다른 것으로 보고 맞추지 않는다.
 
     scale_from: 배율 기준이 되는 (bbox 목록). 자세 시트 여러 장을 같은 배율로 맞출 때 기준 시트의 칸을 넘긴다.
     bg_color: 주면 캐릭터를 깨끗하게 오려(막힌 틈의 배경도 지움) 그 색 배경에 놓는다 (예: 마젠타 크로마키).
@@ -172,12 +187,19 @@ def first_frames(sheet_rgb, dirs, size=(640, 640), char_height=0.72, bottom_marg
     bg, cells, masks = detect_cells(sheet_rgb, dirs)
     ref = scale_from if scale_from is not None else [cells[d] for d in dirs]
     scale = char_height * H / float(np.median([b[3] - b[1] for b in ref]))
+    fix = {d: 1.0 for d in dirs}
+    if even_height:
+        bodies = {d: body_height(masks[d][cells[d][1]:cells[d][3], cells[d][0]:cells[d][2]]) for d in dirs}
+        vals = [v for v in bodies.values() if v]
+        med = float(np.median(vals))
+        if max(vals) <= max_spread * min(vals):        # 늑대인간 옆모습처럼 원래 생김새가 다른 키 차이는 그대로 둔다
+            fix = {d: float(np.clip(med / v, 1 - max_fix, 1 + max_fix)) if v else 1.0 for d, v in bodies.items()}
     feet_y = H - round(bottom_margin * H)
     color = tuple(int(v) for v in bg.round()) if bg_color is None else tuple(int(v) for v in bg_color)
     out = {}
     for d in dirs:
         if bg_color is None:
-            crop, alpha = cutout(sheet_rgb, cells, masks, d, scale, resample)
+            crop, alpha = cutout(sheet_rgb, cells, masks, d, scale * fix[d], resample)
             canvas = Image.new("RGB", (W, H), color)
             canvas.paste(crop, ((W - crop.width) // 2, feet_y - crop.height), alpha)
         else:
@@ -190,12 +212,14 @@ def first_frames(sheet_rgb, dirs, size=(640, 640), char_height=0.72, bottom_marg
             a = sheet_alpha(crop, bg) * own                      # 이 방향 캐릭터 덩어리만
             ys, xs = np.where(a > 0.02)
             rgba = Image.fromarray(cutout_rgba(crop, a, bg)).crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
-            rgba = rgba.resize((max(1, round(rgba.width * scale)), max(1, round(rgba.height * scale))), resample)
+            k = scale * fix[d]
+            rgba = rgba.resize((max(1, round(rgba.width * k)), max(1, round(rgba.height * k))), resample)
             canvas = Image.new("RGBA", (W, H), color + (255,))
             canvas.alpha_composite(rgba, ((W - rgba.width) // 2, feet_y - rgba.height))
             canvas = canvas.convert("RGB")
         out[d] = canvas
-    return out, {"scale": scale, "feet_y": feet_y, "size": [W, H], "bg": list(color), "cells": cells}
+    return out, {"scale": scale, "feet_y": feet_y, "size": [W, H], "bg": list(color), "cells": cells,
+                 "height_fix": {d: round(v, 3) for d, v in fix.items()}}
 
 
 def preview_layout(count):

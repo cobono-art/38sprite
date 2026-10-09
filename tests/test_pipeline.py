@@ -130,6 +130,35 @@ class PipelineHelpersTest(unittest.TestCase):
         finally:
             pl.redraw_direction, project.load, project.load_config = saved
 
+    def test_even_height_first_frames(self):
+        """방향마다 몸 키를 중앙값에 맞춘다 (정면만 6% 크게 그린 시트 → 모두 같은 키). 차이가 15% 넘으면 그대로."""
+        import numpy as np
+        from spritegen.directions import LAYOUT, body_height, first_frames
+        from spritegen.imaging import estimate_bg, frame_alpha
+
+        def sheet(tall):
+            img = np.full((600, 600, 3), 184, np.uint8)
+            for r, row in enumerate(LAYOUT):
+                for c, d in enumerate(row):
+                    if d:
+                        h = tall if d == "S" else 100
+                        img[r * 200 + 180 - h:r * 200 + 180, c * 200 + 75:c * 200 + 125] = (60, 120, 200)
+            return img
+        dirs = ["S", "SE", "E", "NE", "N"]
+
+        def heights(img, even):
+            firsts, _ = first_frames(img, dirs, (320, 320), bg_color=(255, 0, 255), even_height=even)
+            out = {}
+            for d, im in firsts.items():
+                f = np.asarray(im)
+                out[d] = body_height(frame_alpha(f, estimate_bg(f)) > 0.5)
+            return out
+        before, after = heights(sheet(106), False), heights(sheet(106), True)
+        self.assertGreater(before["S"], before["N"] + 8)
+        self.assertLessEqual(max(after.values()) - min(after.values()), 2)
+        wolf = heights(sheet(125), True)                  # 25% 차이: 원래 생김새가 다른 것으로 보고 그대로
+        self.assertGreater(wolf["S"], wolf["N"] + 30)
+
     def test_find_server_prefers_h3(self):
         alive = {"http://127.0.0.1:8188": False, "http://127.0.0.1:8189": True}   # 8188은 켜져 있지만 H3 모델 없음
         h3 = comfy.DEFAULT_MODELS["i2v"]
