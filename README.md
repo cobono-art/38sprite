@@ -8,7 +8,7 @@
 
 ![38Sprite 홍보 영상 하이라이트](docs/promo_highlight.webp)
 
-https://github.com/user-attachments/assets/b035b982-9f20-44be-a81b-7010f28e75b1
+https://github.com/user-attachments/assets/38e45399-a1d9-4126-8a3f-20a381fb4540
 
 영상 속 캐릭터 동작은 모두 38Sprite로 만든 결과물입니다.
 
