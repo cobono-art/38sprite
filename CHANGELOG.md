@@ -3,6 +3,44 @@
 버전은 [깃허브 릴리스](https://github.com/cobono-art/38sprite/releases) 태그와 같습니다. 앱 화면 왼쪽 위에서 지금 버전을 볼 수 있어요.
 Versions match the [GitHub release](https://github.com/cobono-art/38sprite/releases) tags. The app shows its version at the top left.
 
+## v0.6.0 — 2026-10-09
+
+**처음 설치 / First install**
+- ComfyUI 기본 설치에는 OpenCV가 없어서, 깃허브에서 새로 받은 사람은 앱이 켜지지 않을 수 있었습니다. `run_app.bat`이
+  빠진 패키지를 알려 주고 설치할지 묻습니다(이미 있는 numpy 등은 건드리지 않음).
+- ComfyUI 데스크톱 앱·가상환경 설치도 찾습니다.
+- ComfyUI가 여러 개 켜진 PC에서 앱이 다른 ComfyUI의 파이썬을 골라, 빛 궤적 빼기 노드 확인·설치와 자동 켜기가 엉뚱한
+  ComfyUI를 향했습니다. 켜져 있는 영상 AI ComfyUI의 파이썬을 기억해서 씁니다(설정 `comfy_python`).
+- A stock ComfyUI has no OpenCV, so a fresh download could fail to start: `run_app.bat` now lists missing packages and
+  offers to install them. ComfyUI desktop-app/venv installs are found, and on PCs with several ComfyUIs the video-AI one is
+  remembered for node checks, node install and auto-start.
+
+**걷기·달리기 / Walks and runs**
+- 방향마다 따로 반복 구간을 고르면 어떤 방향은 두 바퀴를 골라, 게임에서 방향을 틀면 걸음이 두 배로 빨라졌습니다.
+  이제 모든 방향이 한 바퀴(두 걸음)씩입니다.
+- Every direction now loops exactly one cycle (two steps), so the cadence doesn't double when the character turns.
+
+**도트 / Pixel art**
+- 원본 그림의 머리를 장면마다 맞는 자리에 옮겨 붙여, 얼굴이 원본 그대로이고 흔들리지 않습니다(고개를 숙이거나 효과가
+  가린 장면은 그대로, 설정 `pixel_keep_head`).
+- 원본에 외곽선이 있으면 바깥에 한 줄을 더 두르지 않고 안쪽 한 줄을 외곽선으로 씁니다. 외곽선이 두 겹이 되거나 실루엣이
+  한 칸 커지던 것이 없어졌습니다(설정 `pixel_outline`).
+- 도트 스타일은 영상을 480으로 만듭니다. 방향당 80~85초 → 55~60초, 도트 결과는 같습니다(설정 `pixel_video_size`).
+- The original drawing's head is pasted into every frame where it fits, the outline stays a single row like the art, and
+  pixel-style videos render at 480 px (about 30% faster, same result).
+
+**방향 그림 / Direction drawings**
+- 앞뒤가 바뀐 대각선을 정면에만 있는 얼굴 색으로 찾습니다(예전 검사는 후드가 머리를 덮은 캐릭터를 놓쳤음). 찾으면 그
+  칸만 Codex로 자동으로 다시 그립니다(기본 2번까지, 설정 `auto_redraw`).
+- 방향마다 몸 키를 맞춥니다(±8%까지). Codex가 방향마다 조금씩 다른 크기로 그려서 방향을 틀면 캐릭터가 커졌다
+  작아졌습니다. 늑대인간처럼 원래 생김새가 다른 키 차이는 그대로 둡니다(설정 `even_height`).
+- Wrong-facing diagonals are found by face colors and redrawn automatically; body heights are evened out across directions.
+
+**남은 효과 지우기 / Fix leftover effects**
+- ComfyUI 공식 Qwen-Image-Edit(2509·2511, Lightning 4단계 LoRA가 있으면 4단계)도 씁니다. 영상 AI ComfyUI 하나로도
+  됩니다(처음 모델 읽기 몇 분, 다음부터 한 장 20초 안팎).
+- Works with ComfyUI's official Qwen-Image-Edit too, even inside the video-AI ComfyUI.
+
 ## v0.5.0 — 2026-10-09
 
 **도트 / Pixel art**
