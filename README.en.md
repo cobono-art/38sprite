@@ -22,17 +22,17 @@ A real result (8-direction walk sheets):
 | Feature | What it does |
 |---|---|
 | 8-direction drawings | Upload a turnaround and Codex draws all 8 directions in a 3×3 grid. You can also upload your own grid. |
-| Direction check · redraw one direction | Finds cells drawn facing the wrong way (e.g. a back diagonal NE/NW drawn as a front view), warns you, and redraws just that direction with Codex. |
+| Direction check · redraw one direction | Finds cells drawn facing the wrong way (e.g. a back diagonal NE/NW drawn as a front view) by face colors (skin and eye colors only the front view has) and redraws just that cell with Codex automatically (up to twice by default). You can also redraw one direction by hand. |
 | Three motion inputs | Text ("walk in place"), a reference video (e.g. a dance), or a 3D mannequin (Codex writes keyframes; each direction follows a mannequin video rendered from its own angle). |
 | Video → 3D mannequin | Extracts a 3D skeleton from every frame of a reference video (MediaPipe), drives the 3D mannequin with it, and has each direction follow it from its own angle, so side and back views do the same move. Without the skeleton tool, Codex reads the video and writes the motion instead. |
 | Basic motion set | Idle, walk, run, attack, hit and death in one click. |
-| Loops · one-shots | Walks and dances are cut into seamless loops; attacks are trimmed to the action. Motions that end in a different pose (like death) are supported. |
+| Loops · one-shots | Walks and dances are cut into seamless loops; attacks are trimmed to the action. Every direction of a walk or run loops exactly one cycle (two steps), so the cadence stays the same when the character turns. Motions that end in a different pose (like death) are supported. |
 | Directions · camera | 8, 4 or 2 directions, from eye level to top-down (default: 45° high quarter view). |
-| HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. In pixel style the pixel height is measured from the pixel grid Codex actually drew, so one sprite pixel matches one pixel of the art (asked for 64, Codex draws about 74). Small specks are merged into the surrounding color and frame-to-frame color flicker is reduced. |
+| HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. In pixel style the pixel height is measured from the pixel grid Codex actually drew, so one sprite pixel matches one pixel of the art (asked for 64, Codex draws about 74). Small specks are merged into the surrounding color and frame-to-frame color flicker is reduced. The head of the original drawing is pasted where it fits in every frame, so the face stays exactly like the art and doesn't wobble. Pixel style renders its videos at 480 px, about 30% faster. |
 | Light effects | None · vivid · strip (under "Advanced"). Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
 | Magenta from start to end | Everything from the Codex direction drawings to the 3D mannequin mode is made on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated with a new seed (up to twice by default) and the cleanest result is kept. |
 | Light-trail removal (optional) | The video AI (H3) has no negative prompt, and writing "no trails" makes it draw them. A ComfyUI node made for 38Sprite (install with `setup_negative.bat`) removes light trails, sparkles and glows during generation for motions without effects, at the same speed. |
-| Fix leftover effects (optional) | For a trail that still slips through, pick the frame and press "Remove effects in this frame": an image-editing AI (Qwen-Image 2.1 edit) erases only the effects and only the strongly changed areas are pasted into the original frame (about a minute per frame including model loading). "Original frame" undoes it. |
+| Fix leftover effects (optional) | For a trail that still slips through, pick the frame and press "Remove effects in this frame": an image-editing AI (ComfyUI's official Qwen-Image-Edit, or Qwen-Image 2.1 edit) erases only the effects and only the strongly changed areas are pasted into the original frame (about a minute per frame including model loading). "Original frame" undoes it. |
 | AI matting (optional) | BEN v2 (MIT) fixes only what chroma keying gets wrong: holes in colors close to the background, floor shadows and colored fringes. Used automatically after `setup_matting.bat` downloads the model (about 380 MB). |
 | Automatic checks | Flags holes, magenta/green fringes, loop seams, cut-offs at the frame edge, per-direction size differences, empty frames and mid-clip background color changes, and marks the frames. |
 | Post-processing | Change playback speed, swap a bad frame for another moment of the video, or remake one direction (and undo it if you liked the old one better), without regenerating everything. Walks and runs can be previewed over a scrolling ground, like in a game, to tune the movement speed ("Walk like in a game"). |
@@ -74,8 +74,11 @@ turnaround ─▶ Codex: 8-direction grid (3×3) ─▶ first frame per directio
 - **(Optional) light-trail removal node**: run `setup_negative.bat` once to copy `comfyui_nodes/sprite_neg_h3` into the
   `custom_nodes` folder of your video-AI ComfyUI (nothing is downloaded). Restart ComfyUI and the app uses it automatically. If your ComfyUI runs with `--disable-all-custom-nodes`, the
   "Turn on trail removal" button at the top restarts it with the same options, allowing only this node.
-- **(Optional) image-editing AI**: "Remove effects in this frame" needs a ComfyUI with the Qwen-Image 2.1 edit model and
-  nodes (`TextEncodeQwenImage21`, `QwenImage21Cache`). The app looks on ports 8188, 8189 and 8000 (setting `edit_url`).
+- **(Optional) image-editing AI**: "Remove effects in this frame" needs a ComfyUI with ComfyUI's official Qwen-Image-Edit
+  models (`qwen_image_edit_2509`/`2511` etc. + the `qwen_2.5_vl_7b` text encoder + `qwen_image_vae`, faster with the Lightning
+  4-step LoRA) or the Qwen-Image 2.1 edit nodes (`TextEncodeQwenImage21`, `QwenImage21Cache`). The official models can live in
+  your video-AI ComfyUI (a few minutes to load the first time, then about 20 s per frame). The app looks on ports 8188, 8189
+  and 8000 (setting `edit_url`).
   It shares the GPU with the video AI, so the video model is unloaded first and frames can't be fixed while a video is being made.
 - **(Optional) AI matting model**: run `setup_matting.bat` once to download BEN v2 (PramaLLC, MIT) into `models/ben2`
   (about 380 MB). The Python bundled with ComfyUI already has torch, so nothing else needs installing.
@@ -158,6 +161,9 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `matting_dir` | `models/ben2` | Folder with the BEN v2 files (`BEN2.py`, `model.safetensors`) |
 | `turbo_r2v_steps` | `6` | Generation steps for 3D mannequin mode (4 is faster, but about 40% of seeds turn the background into blotches or rings and need a redo) |
 | `pixel_auto_height` | `true` | Use the pixel height measured from the direction sheet's pixel grid (`false` scales down to the height you chose) |
+| `pixel_video_size` | `480` | Video size for pixel style (640 matches HD and is about 30% slower; the pixel result is the same) |
+| `pixel_keep_head` | `true` | Paste the original drawing's head into every pixel frame where it fits (frames where it doesn't fit are left alone) |
+| `auto_redraw` | `2` | How many times to redraw cells drawn facing the wrong way (0 = only warn) |
 | `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
 | `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
 | `negative_words` | (trails, sparkles, glows …) | What the node removes (English, comma-separated) |
@@ -166,7 +172,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `mannequin_body` | `clay` | 3D mannequin reference: `clay` (bald human model) · `chibi` (the same model with chibi proportions) · `male` · `female` · `off` (capsule mannequin) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
 | `edit_url` | (found automatically) | ComfyUI with the image-editing AI for "Remove effects in this frame" |
-| `edit_models` | (default Qwen-Image 2.1 edit file names) | Only if your edit model files are named differently: `{"unet": …, "clip": …, "vae": …}` |
+| `edit_models` | (picked from the files you have) | Only to choose the edit model files yourself: `{"unet": …, "clip": …, "vae": …, "lora": …}` |
 
 ## Please read: licenses and notes
 
