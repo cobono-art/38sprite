@@ -96,41 +96,56 @@ def detect_cells(src, required, thresh=40):
     return bg, cells, masks
 
 
-def facing_scores(src, dirs):
-    """방향마다 머리 쪽(캐릭터 윗부분 35%) 색 분포가 뒷모습(N)·앞모습(S)과 얼마나 닮았는지.
-    얼굴이 보이면 피부·눈 색, 뒤를 보면 머리카락·등 색이 많아서 앞뒤가 갈린다. {방향: (N과 닮음, S와 닮음)}"""
+def head_colors(src, dirs, frac=0.45):
+    """방향마다 머리 쪽(캐릭터 윗부분 45%) 색 분포 (RGB 8x8x8 칸)."""
     _, cells, masks = detect_cells(src, dirs)
-    hists = {}
+    out = {}
     for d in dirs:
         x0, y0, x1, y1 = cells[d]
-        top = y0 + max(1, int((y1 - y0) * 0.35))
+        top = y0 + max(1, int((y1 - y0) * frac))
         px = src[y0:top, x0:x1][masks[d][y0:top, x0:x1]]
         if len(px) < 50:
             return {}
-        q = (px // 64).astype(int)
-        h = np.bincount(q[:, 0] * 16 + q[:, 1] * 4 + q[:, 2], minlength=64).astype(float)
-        hists[d] = h / h.sum()
-    return {d: (float(np.minimum(h, hists["N"]).sum()), float(np.minimum(h, hists["S"]).sum()))
-            for d, h in hists.items()}
+        q = (px // 32).astype(int)
+        h = np.bincount(q[:, 0] * 64 + q[:, 1] * 8 + q[:, 2], minlength=512).astype(float)
+        out[d] = h / h.sum()
+    return out
 
 
-def facing_problems(src, dirs, margin=0.08):
-    """8방향 그림에서 앞뒤가 바뀐 대각선을 찾는다: 뒤 대각선(NE·NW)이 앞모습(S)을 더 닮았거나,
-    앞 대각선(SE·SW)이 뒷모습(N)을 더 닮았으면. [{"dir": 방향, "looks": "front" | "back"}]"""
+def face_shares(src, dirs):
+    """방향마다 '얼굴 색'이 정면(S)의 몇 배 보이는지 {방향: 비율}. 얼굴 색 = 정면 머리 쪽에만 많고 뒷모습(N)에는 거의 없는
+    색(피부·눈). 후드·머리카락처럼 앞뒤에 다 있는 색은 빼고 본다. 정면에 그런 색이 거의 없으면(가면·로봇 등) {}."""
+    h = head_colors(src, dirs)
+    if not h or "S" not in h or "N" not in h:
+        return {}
+    face = h["S"] > 2 * h["N"] + 0.002
+    total = h["S"][face].sum()
+    if total < 0.03:
+        return {}
+    return {d: float(v[face].sum() / total) for d, v in h.items()}
+
+
+def facing_problems(src, dirs):
+    """8방향 그림에서 앞뒤가 바뀐 대각선을 찾는다 → [{"dir": 방향, "looks": "front" | "back"}].
+    뒤 대각선(NE·NW)에 얼굴 색이 앞 대각선(SE·SW)만큼(0.75배 이상) 보이면 앞모습으로 잘못 그린 것, 앞 대각선에 얼굴 색이
+    정면의 0.35배도 안 보이면 뒷모습으로 잘못 그린 것. 2026-10-09: 예전에는 머리 쪽 색 분포가 앞·뒤 중 어디를 닮았는지만
+    봐서, 노란 후드가 머리를 덮은 캐릭터처럼 앞뒤 색이 비슷하면 놓쳤다. 시트 11장에서 틀린 칸(꼬마 HD NE·NW, 반실사 기사
+    NE·NW, 모험가 NW)을 모두 잡고 멀쩡한 칸은 하나도 안 잡았다."""
     if not {"N", "S"} <= set(dirs):
         return []
     try:
-        scores = facing_scores(src, dirs)
+        f = face_shares(src, dirs)
     except ValueError:
         return []
+    if not f:
+        return []
+    front_ref = max([f[d] for d in ("SE", "SW") if d in f] or [1.0])
     out = []
-    for d, back_wanted in (("NE", True), ("NW", True), ("SE", False), ("SW", False)):
-        if d not in scores:
-            continue
-        back, front = scores[d]
-        if back_wanted and front > back + margin:
+    for d in ("NE", "NW"):
+        if d in f and front_ref >= 0.5 and (f[d] >= 0.75 * front_ref or f[d] >= 0.8):
             out.append({"dir": d, "looks": "front"})
-        elif not back_wanted and back > front + margin:
+    for d in ("SE", "SW"):
+        if d in f and f[d] < 0.35:
             out.append({"dir": d, "looks": "back"})
     return out
 

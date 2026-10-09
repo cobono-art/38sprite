@@ -8,7 +8,8 @@ from PIL import Image
 from helpers import TempDir, attack_frame, write_frames
 
 from spritegen.assemble import assemble
-from spritegen.repair import splice
+from spritegen import repair
+from spritegen.repair import merge_edit, splice
 
 
 class RepairTest(unittest.TestCase):
@@ -22,6 +23,53 @@ class RepairTest(unittest.TestCase):
         out = splice(orig, edit)
         self.assertLess(np.abs(out[8, 50].astype(int) - (255, 0, 255)).max(), 4)   # 궤적 자리는 편집 결과(마젠타)
         self.assertTrue((out[30, 30] == orig[30, 30]).all())
+
+    def test_merge_edit_keeps_original_background(self):
+        """공식 편집 AI가 배경을 짙은 분홍으로 칠해도, 합친 그림의 배경·지운 궤적 자리는 원래 영상의 마젠타."""
+        orig = np.full((60, 60, 3), (255, 0, 255), np.uint8)
+        orig[10:50, 20:40] = (200, 120, 60)
+        orig[5:15, 45:58] = (120, 240, 255)                 # 빛 궤적
+        edit = np.full((60, 60, 3), (215, 40, 134), np.uint8)   # 짙은 분홍 배경
+        edit[10:50, 20:40] = (200, 120, 60)
+        out = merge_edit(orig, edit)
+        self.assertTrue((out[2, 2] == (255, 0, 255)).all())
+        self.assertTrue((out[8, 50] == (255, 0, 255)).all())     # 궤적 자리
+        self.assertTrue((out[30, 30] == (200, 120, 60)).all())
+
+    def test_backend_picks_official_qwen_edit(self):
+        """전용 노드가 없고 공식 노드 + qwen_image_edit 모델이 있으면 공식 방식(최신판, Lightning 4단계)."""
+        lists = {"UNETLoader": ("unet_name", ["qwen_image_edit_fp8_e4m3fn.safetensors", "qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+                                              "other.safetensors"]),
+                 "CLIPLoader": ("clip_name", ["qwen_2.5_vl_7b_fp8_scaled.safetensors"]),
+                 "VAELoader": ("vae_name", ["qwen_image_vae.safetensors"]),
+                 "LoraLoaderModelOnly": ("lora_name", ["Qwen-Image-Edit-Lightning-4steps-V1.0.safetensors"])}
+
+        def fake(url, payload=None, timeout=60):
+            node = url.rsplit("/", 1)[1]
+            if node in lists:
+                field, names = lists[node]
+                return {node: {"input": {"required": {field: [names]}}}}
+            return {node: {}} if node == repair.EDIT_NODE else {}
+        saved = repair.comfy.http_json
+        repair.comfy.http_json = fake
+        try:
+            self.assertEqual(repair.backend("http://x"), "qwen_edit")
+            m = repair.edit_models("http://x", {})
+            self.assertEqual(m["unet"], "qwen_image_edit_2509_fp8_e4m3fn.safetensors")
+            wf = repair.workflow_edit("a.png", "p", 1, "x", m)
+            self.assertEqual((wf["q_sample"]["inputs"]["steps"], wf["q_sample"]["inputs"]["cfg"]), (4, 1.0))
+            self.assertEqual(wf["q_shift"]["inputs"]["model"], ["q_lora", 0])
+            for node in wf.values():                        # 모든 연결이 있는 노드를 가리킨다
+                for v in node["inputs"].values():
+                    if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and v[0].startswith("q_"):
+                        self.assertIn(v[0], wf)
+            lists["LoraLoaderModelOnly"] = ("lora_name", [])
+            wf = repair.workflow_edit("a.png", "p", 1, "x", repair.edit_models("http://x", {}))
+            self.assertEqual((wf["q_sample"]["inputs"]["steps"], wf["q_sample"]["inputs"]["cfg"]), (20, 2.5))
+            lists["VAELoader"] = ("vae_name", [])
+            self.assertIsNone(repair.backend("http://x"))
+        finally:
+            repair.comfy.http_json = saved
 
     def test_assemble_uses_repaired_frame(self):
         with TempDir() as td:

@@ -76,6 +76,60 @@ class PipelineHelpersTest(unittest.TestCase):
         finally:
             project.load_config = saved
 
+    @staticmethod
+    def fake_sheet(wrong=()):
+        """3x3 방향 그림 흉내: 앞모습 머리는 피부·눈, 뒷모습 머리는 머리카락만. wrong에 든 뒤 대각선은 앞모습으로 그린다."""
+        import numpy as np
+        from spritegen.directions import LAYOUT
+        img = np.full((600, 600, 3), 184, np.uint8)
+        for r, row in enumerate(LAYOUT):
+            for c, d in enumerate(row):
+                if not d:
+                    continue
+                x, y = c * 200 + 70, r * 200 + 30
+                img[y + 60:y + 150, x:x + 60] = (40, 120, 60)              # 몸 (초록)
+                img[y:y + 60, x:x + 60] = (120, 60, 20)                    # 머리 (머리카락 색)
+                front = d.startswith("S") or d in ("E", "W") or d in wrong
+                if front:
+                    img[y + 20:y + 55, x + 10:x + 50] = (240, 200, 160)    # 얼굴 (피부)
+                    img[y + 30:y + 36, x + 18:x + 24] = (30, 30, 30)       # 눈
+                    img[y + 30:y + 36, x + 36:x + 42] = (30, 30, 30)
+        return img
+
+    def test_facing_problems_finds_front_drawn_back_diagonal(self):
+        """뒤 대각선(NE·NW)을 앞모습으로 그린 칸만 찾는다 (머리를 덮은 후드처럼 앞뒤 공통 색이 많아도 얼굴 색으로 가린다)."""
+        from spritegen.directions import facing_problems
+        dirs = ["S", "SE", "E", "NE", "N", "SW", "W", "NW"]
+        self.assertEqual(facing_problems(self.fake_sheet(), dirs), [])
+        self.assertEqual(facing_problems(self.fake_sheet(wrong=("NE",)), dirs), [{"dir": "NE", "looks": "front"}])
+        self.assertEqual([f["dir"] for f in facing_problems(self.fake_sheet(wrong=("NE", "NW")), dirs)], ["NE", "NW"])
+
+    def test_auto_fix_facing_redraws_until_clean(self):
+        """앞뒤가 바뀐 칸이 있으면 그 칸만 다시 그리고, 고친 그림이 깨끗하면 멈춘다 (설정 auto_redraw번까지)."""
+        from spritegen import project
+        calls = []
+        sheets = iter([{"facing": []}])
+        saved = (pl.redraw_direction, project.load, project.load_config)
+
+        class Job:
+            message = ""
+        try:
+            pl.redraw_direction = lambda job, pid, d: calls.append(d)
+            project.load = lambda pid: {"sheet": next(sheets)}
+            project.load_config = lambda: {}
+            pl.auto_fix_facing(Job(), "p", {"facing": [{"dir": "NE", "looks": "front"}]})
+            self.assertEqual(calls, ["NE"])
+            calls.clear()
+            project.load = lambda pid: {"sheet": {"facing": [{"dir": "NE", "looks": "front"}]}}   # 계속 틀리면 2번까지
+            pl.auto_fix_facing(Job(), "p", {"facing": [{"dir": "NE", "looks": "front"}]})
+            self.assertEqual(calls, ["NE", "NE"])
+            calls.clear()
+            project.load_config = lambda: {"auto_redraw": 0}
+            pl.auto_fix_facing(Job(), "p", {"facing": [{"dir": "NE", "looks": "front"}]})
+            self.assertEqual(calls, [])
+        finally:
+            pl.redraw_direction, project.load, project.load_config = saved
+
     def test_find_server_prefers_h3(self):
         alive = {"http://127.0.0.1:8188": False, "http://127.0.0.1:8189": True}   # 8188은 켜져 있지만 H3 모델 없음
         h3 = comfy.DEFAULT_MODELS["i2v"]
@@ -164,6 +218,22 @@ class PipelineHelpersTest(unittest.TestCase):
         for t in (prompts.sheet_prompt(["S", "E", "N"], 45, "pixel"), prompts.redraw_prompt("E", 45, "pixel")):
             self.assertIn("magenta (#FF00FF) chroma-key background", t)   # 코덱스 방향 그림도 마젠타 (회색은 틈·테두리가 남음)
             self.assertNotIn("gray", t)
+
+    def test_motion_frame_size(self):
+        """도트 스타일은 처음 만들 때 480 (설정 pixel_video_size), 이미 만든 동작은 만들 때 크기 그대로, 예전 동작은 640."""
+        from spritegen import project
+        saved = project.load_config
+        try:
+            project.load_config = lambda: {}
+            px = {"settings": {"style": "pixel", "pixel_height": 64}}
+            self.assertEqual(pl.motion_frame_size(px, fresh=True), (480, 480))
+            self.assertEqual(pl.motion_frame_size({"settings": {"style": "hd"}}, fresh=True), (640, 640))
+            self.assertEqual(pl.motion_frame_size(dict(px, frame_size=[480, 480])), (480, 480))
+            self.assertEqual(pl.motion_frame_size(px), (640, 640))           # 크기를 적어 두기 전에 만든 동작
+            project.load_config = lambda: {"pixel_video_size": 520}
+            self.assertEqual(pl.motion_frame_size(px, fresh=True), (512, 512))   # 16의 배수로
+        finally:
+            project.load_config = saved
 
     def test_pixel_height_from_sheet(self):
         """도트 결과 키는 방향 그림에서 잰 칸 수 (코덱스는 64칸 지시에도 약 74칸으로 그림), 못 쟀거나 끄면 설정값."""

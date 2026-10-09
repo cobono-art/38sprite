@@ -27,6 +27,19 @@ EXAMPLES = __import__("pathlib").Path(__file__).resolve().parent / "examples"
 
 FRAME_SIZE = (640, 640)
 
+
+def motion_frame_size(m, fresh=False):
+    """이 동작의 영상 크기 (가로, 세로). 도트 스타일은 결과가 키 74칸 안팎이라 480으로 만들어도 도트 품질이 같고 약 30%
+    빠르다(2026-10-09 같은 시드 걷기 5방향: 640 방향당 80~85초 → 480 55~60초, 설정 pixel_video_size).
+    이미 만든 동작은 만들 때의 크기 그대로 (한 방향만 다시 만들거나 시트를 다시 조립할 때 다른 방향과 맞게, 크기를
+    적어 두기 전에 만든 동작은 640). fresh: 처음부터 새로 만들 때."""
+    if not fresh:
+        return tuple(m.get("frame_size") or FRAME_SIZE)
+    if m["settings"]["style"] == "pixel":
+        n = int(store.load_config().get("pixel_video_size", 480)) // 16 * 16
+        return (n, n)
+    return FRAME_SIZE
+
 # 기본 모션 세트: 캐릭터 하나로 게임에 바로 넣을 동작 묶음. key는 내보낼 때 파일·애니메이션 이름으로 쓴다.
 # 공격·피격은 방향마다 손·박자가 맞아야 해서 3D 마네킹, 쓰러짐은 처음 자세로 돌아오지 않는 동작(hold_end)이다.
 MOTION_SET = [
@@ -124,6 +137,27 @@ def make_sheet(job, pid):
     store.update(pid, upd)
     if rec["problem"]:
         raise RuntimeError(rec["problem"] + " — 다시 그려 주세요")
+    auto_fix_facing(job, pid, rec)
+
+
+def auto_fix_facing(job, pid, rec, rounds=None):
+    """방향 그림에서 앞뒤가 바뀐 대각선이 보이면 그 칸만 Codex로 다시 그린다 (설정 auto_redraw, 기본 2번까지 — 고친 그림이
+    또 틀리면 한 번 더). Codex는 뒤 대각선(NE·NW)을 앞모습으로 그리는 실수가 잦다(2026-10-09 HD 시트에서도 또 나옴).
+    예전에는 알려 주기만 하고 사람이 '한 방향만 다시 그리기'를 눌러야 했다. 다시 그리다 실패해도 그린 시트는 그대로 쓴다."""
+    rounds = int(store.load_config().get("auto_redraw", 2)) if rounds is None else rounds
+    for i in range(rounds):
+        facing = rec.get("facing") or []
+        if not facing:
+            return
+        try:
+            for f in facing:
+                job.message = (f"{f['dir']} 방향이 {'앞모습' if f['looks'] == 'front' else '뒷모습'}처럼 그려져서 "
+                               f"그 칸만 다시 그리는 중이에요 ({i + 1}/{rounds})")
+                redraw_direction(job, pid, f["dir"])
+        except Exception as e:  # noqa: BLE001 — Codex가 실패해도 처음 그린 시트는 쓸 수 있다
+            job.message = f"앞뒤가 바뀐 칸을 자동으로 다시 그리지 못했어요: {e}"
+            return
+        rec = store.load(pid)["sheet"]
 
 
 def use_uploaded_sheet(pid, data, suffix):
@@ -245,7 +279,7 @@ def start_redraw(pid, d):
 
 # ---------- 동작 ----------
 
-def prepare_reference_video(src, dst, max_sec=5.0, max_side=640):
+def prepare_reference_video(src, dst, max_sec=5.0, max_side=FRAME_SIZE[0]):
     """레퍼런스 영상을 24fps·최대 max_sec초·긴 변 max_side로 맞춘다 (H3 레퍼런스 영상 입력 형식)."""
     cap = cv2.VideoCapture(str(src))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -498,7 +532,7 @@ def render_mannequin_refs(pid, mid, gen, meta, server):
     m = next(x for x in p["motions"] if x["id"] == mid)
     s = m["settings"]
     mdir = store.project_dir(pid) / "motions" / mid
-    W, H = FRAME_SIZE
+    W, H = motion_frame_size(m)
     char_px = meta["char_px"]                          # 첫 프레임 캐릭터와 같은 크기로
     cos_e = max(0.3, np.cos(np.radians(mannequin_elevation(s["angle"]))))
     scale = 0.9 * char_px / (1.62 * cos_e + 0.15)
@@ -725,6 +759,11 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
     oneshot = m["kind"] == "oneshot"
     master = m.get("master") or pick_master(gen)
 
+    fresh = not only and phase in ("all", "master", "mannequin")
+    size = motion_frame_size(m, fresh)
+    if fresh:
+        _set_motion(pid, mid, frame_size=list(size))
+
     job.message = "방향별 첫 프레임 만드는 중"
     sheet_file = m.get("sheet", p["sheet"]["file"])
     if only and p["sheet"].get("from") == sheet_file:  # 이 동작을 만든 뒤 방향 그림에서 칸을 고쳤으면 고친 그림으로
@@ -736,10 +775,10 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
     # 마네킹 모드는 마네킹 영상과 같은 배경색이어야 한다 (mannequin_bg: 기본 마젠타, 설정으로 예전 회색).
     mannequin = m.get("mode") == "mannequin"
     gray = mannequin and mannequin_bg() != KEY_MAGENTA
-    firsts, meta = first_frames(sheet_rgb, gen, FRAME_SIZE, char_height=char_h, bottom_margin=bottom,
+    firsts, meta = first_frames(sheet_rgb, gen, size, char_height=char_h, bottom_margin=bottom,
                                 resample=Image.NEAREST if s["style"] == "pixel" else Image.LANCZOS,
                                 bg_color=None if gray else KEY_MAGENTA)
-    meta["char_px"] = char_h * FRAME_SIZE[1]
+    meta["char_px"] = char_h * size[1]
     (mdir / "first").mkdir(parents=True, exist_ok=True)
     for d, im in firsts.items():
         if d in targets:                               # 다시 만들지 않는 방향은 그 영상을 만든 첫 프레임 그대로
@@ -771,7 +810,7 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
     video = None
     if m["source"] == "video":
         job.message = "레퍼런스 영상 준비 중"
-        prepared, _ = prepare_reference_video(mdir / m["video"], mdir / "reference_24fps.mp4")
+        prepared, _ = prepare_reference_video(mdir / m["video"], mdir / "reference_24fps.mp4", max_side=size[0])
         video = comfy.upload(server, prepared, f"{pid}_{mid}_ref.mp4")
 
     def direct_wf(d):
@@ -780,11 +819,11 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
         if video:
             prompt = reference_prompt(m["kind"], s["angle"], d, m.get("text", ""), s["style"], fx)
             # 터보(4스텝)는 영상 속 사람이 보는 방향까지 베껴서, 방향을 다시 잡는 20스텝으로 만든다
-            wf = comfy.r2v_workflow(first, video, prompt, *FRAME_SIZE, length, seed, prefix,
+            wf = comfy.r2v_workflow(first, video, prompt, *size, length, seed, prefix,
                                     turbo=False, guides=end_guides(first))
         else:
             prompt = motion_prompt(m["kind"], m["text"], s["angle"], d, s["style"], fx, hold_end)
-            wf = comfy.i2v_workflow(first, None if hold_end else first, prompt, *FRAME_SIZE, length, seed, prefix)
+            wf = comfy.i2v_workflow(first, None if hold_end else first, prompt, *size, length, seed, prefix)
         (mdir / "first" / f"{d}.prompt.txt").write_text(prompt, encoding="utf-8")
         return d, neg(wf)
 
@@ -812,7 +851,7 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
             prompt = mannequin_prompt(s["angle"], d, m.get("text", ""), s["style"], fx, gray=gray)
             (mdir / "first" / f"{d}.prompt.txt").write_text(prompt, encoding="utf-8")
             # 레퍼런스가 이미 그 방향에서 본 영상이라, 그대로 따라 하는 터보(4스텝)가 오히려 맞다
-            items.append((d, neg(comfy.r2v_workflow(first, refs_mq[d], prompt, *FRAME_SIZE, length, seed,
+            items.append((d, neg(comfy.r2v_workflow(first, refs_mq[d], prompt, *size, length, seed,
                                                     f"spritegen/{pid}/{mid}_{d}", turbo=info.get("turbo_r2v", False),
                                                     guides=end_guides(first)))))
         if not _generate(job, server, items, mdir, expect_magenta=not gray):
@@ -833,7 +872,7 @@ def run_motion(job, pid, mid, server, phase="all", only=None):
             prompt = follow_prompt(m["kind"], s["angle"], d, m.get("text", ""), s["style"], fx)
             (mdir / "first" / f"{d}.prompt.txt").write_text(prompt, encoding="utf-8")
             # 4스텝 터보는 레퍼런스의 보는 방향까지 그대로 베껴서(옆모습 마스터 → 정면도 옆모습), 20스텝으로 만든다
-            items.append((d, neg(comfy.r2v_workflow(first, ref, prompt, *FRAME_SIZE, length, seed,
+            items.append((d, neg(comfy.r2v_workflow(first, ref, prompt, *size, length, seed,
                                                     f"spritegen/{pid}/{mid}_{d}", turbo=False,
                                                     guides=[(first, 0), (first, -1)]))))
         if not _generate(job, server, items, mdir):
@@ -872,7 +911,8 @@ def assemble_motion(pid, mid, extra=None):
     oneshot = m["kind"] == "oneshot"
     sheet_rgb = np.asarray(Image.open(pdir / m.get("sheet", p["sheet"]["file"])).convert("RGB"))
     char_h, bottom = frame_fit(m, s, gen, mdir)
-    _, meta = first_frames(sheet_rgb, gen, FRAME_SIZE, char_height=char_h, bottom_margin=bottom)
+    size = motion_frame_size(m)
+    _, meta = first_frames(sheet_rgb, gen, size, char_height=char_h, bottom_margin=bottom)
     # 모든 방향이 같은 박자를 따르는 모드는 한 번 동작을 같은 구간으로 자른다 (칸끼리 시점이 맞게)
     window = span = None
     length = comfy.frames_for_seconds(m.get("seconds", 5))
@@ -885,12 +925,12 @@ def assemble_motion(pid, mid, extra=None):
     master = m.get("master") or pick_master(gen)
     refs = [load_ref(mdir / "first" / f"{d}.png") for d in gen] if s["style"] == "pixel" else None
     pixel_h = pixel_height_for(p, m, sheet_rgb)
-    report = assemble({d: mdir / "frames" / d for d in gen}, s["count"], FRAME_SIZE, meta["feet_y"], mdir / "out",
+    report = assemble({d: mdir / "frames" / d for d in gen}, s["count"], size, meta["feet_y"], mdir / "out",
                       kind=m["kind"], n_frames=m.get("frames", 8),
                       pixel_height=pixel_h, palette_refs=refs,
                       strip_effects=effects_of(m) == "strip",
                       window=window, window_from=master if oneshot and m.get("mode") == "master" else None,
-                      char_px=char_h * FRAME_SIZE[1], overrides=m.get("frame_overrides"),
+                      char_px=char_h * size[1], overrides=m.get("frame_overrides"),
                       hold_end=oneshot and m.get("hold_end", False), effects=effects_of(m), loop_span=span,
                       matting=matting.enabled(), locomotion=is_locomotion(m), move_scale=float(m.get("move_scale") or 1.0),
                       ground_y=max(0.25, float(np.sin(np.radians(mannequin_elevation(s["angle"]))))),

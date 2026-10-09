@@ -135,7 +135,7 @@ const EN = {
     "Redraws this frame with an image-editing AI to remove only light trails and sparkles (10–40 s). The pose stays the same.",
   "편집 AI가 이 장의 빛 효과를 지우는 중… 시트까지 다시 만들어서 1분쯤 걸려요": "The editing AI is removing light effects in this frame… rebuilding the sheet takes about a minute",
   "다 만든 동작만 고칠 수 있어요": "Only finished motions can be fixed", "고칠 칸이 올바르지 않아요": "Invalid frame to fix",
-  "이미지 편집 AI(Qwen-Image 2.1 edit)가 있는 ComfyUI를 찾지 못했어요": "Couldn't find a ComfyUI with the image-editing AI (Qwen-Image 2.1 edit)",
+  "이미지 편집 AI(Qwen-Image-Edit)가 있는 ComfyUI를 찾지 못했어요": "Couldn't find a ComfyUI with the image-editing AI (Qwen-Image-Edit)",
   "그 장면의 영상 프레임이 없어요": "That video frame is missing",
   "영상 AI가 만드는 중이라 지금은 고칠 수 없어요 (그래픽카드를 같이 써요). 끝난 뒤에 해 주세요": "The video AI is busy (they share the GPU). Try again when it finishes",
   "이동 속도 (자동으로 잰 속도의 몇 배)": "Move speed (× the measured speed)",

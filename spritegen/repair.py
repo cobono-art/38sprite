@@ -5,7 +5,12 @@
 깨끗이 사라짐. 첫 장면을 참고 그림으로 같이 주면 정면에서 자세까지 첫 장면으로 되돌려서 그 장만 넣는다).
 고친 그림은 <동작>/repaired/<방향>/<프레임 번호>.png 에 두고, 시트를 조립할 때 그 프레임 대신 쓴다 (지우면 원래대로).
 편집 모델과 영상 AI가 그래픽카드 하나를 같이 쓰므로, 고치기 전에 영상 AI 쪽 모델을 내리고(대기열이 비어 있을 때만)
-고친 뒤 편집 모델도 내린다."""
+고친 뒤 편집 모델도 내린다.
+
+편집 방식 두 가지 중 그 ComfyUI에 있는 것을 쓴다:
+- qwen21: Qwen-Image 2.1 edit (전용 노드 TextEncodeQwenImage21·QwenImage21Cache, 처음 만든 방식)
+- qwen_edit: ComfyUI 공식 Qwen-Image-Edit (TextEncodeQwenImageEditPlus + qwen_image_edit 모델 + qwen_2.5_vl_7b + qwen_image_vae,
+  Lightning 4단계 LoRA가 있으면 4단계). 깃허브에서 받은 사람도 공식 모델만 받으면 영상 AI ComfyUI 하나로 쓸 수 있다."""
 import json
 import urllib.request
 import uuid
@@ -16,6 +21,7 @@ import numpy as np
 from PIL import Image
 
 from . import comfy
+from .imaging import estimate_bg, frame_alpha
 
 MODELS = {"unet": "qwen_image_2.1_int8_convrot.safetensors", "clip": "qwen3vl_8b_w4a8.safetensors",
           "vae": "qwen_image_2.1_vae_bf16.safetensors"}
@@ -27,19 +33,53 @@ PROMPT = ("Remove all visual effects from this game sprite frame: every glowing 
 CANDIDATES = ("http://127.0.0.1:8188", "http://127.0.0.1:8189", "http://127.0.0.1:8000")
 
 
+EDIT_NODE = "TextEncodeQwenImageEditPlus"
+
+
 def models(cfg):
     return dict(MODELS, **(cfg.get("edit_models") or {}))
 
 
+def _choices(url, node, field):
+    return comfy.http_json(f"{url}/object_info/{node}", timeout=10)[node]["input"]["required"][field][0]
+
+
+def edit_models(url, cfg):
+    """공식 Qwen-Image-Edit 방식에 쓸 모델 파일 {unet, clip, vae, lora 또는 None}. 하나라도 없으면 None.
+    여러 개면 최신판(2511 > 2509 > 처음판)을 고른다. 설정 edit_models로 직접 정할 수 있다."""
+    want = cfg.get("edit_models") or {}
+    unets = _choices(url, "UNETLoader", "unet_name")
+    clips = _choices(url, "CLIPLoader", "clip_name")
+    vaes = _choices(url, "VAELoader", "vae_name")
+    loras = _choices(url, "LoraLoaderModelOnly", "lora_name")
+
+    def rank(n):
+        return ("2511" in n) * 3 + ("2509" in n) * 2, n
+    unet = want.get("unet") if want.get("unet") in unets else max(
+        (n for n in unets if "qwen_image_edit" in n.lower()), key=rank, default=None)
+    clip = want.get("clip") if want.get("clip") in clips else next((n for n in clips if "qwen_2.5_vl_7b" in n.lower()), None)
+    vae = want.get("vae") if want.get("vae") in vaes else next((n for n in vaes if n.lower() == "qwen_image_vae.safetensors"), None)
+    lora = want.get("lora") if want.get("lora") in loras else next(
+        (n for n in loras if "qwen-image-edit-lightning-4steps" in n.lower()), None)
+    return {"unet": unet, "clip": clip, "vae": vae, "lora": lora} if unet and clip and vae else None
+
+
+def backend(url, cfg=None):
+    """그 ComfyUI에서 쓸 수 있는 편집 방식: 'qwen21' | 'qwen_edit' | None."""
+    cfg = cfg or {}
+    try:
+        if comfy.http_json(f"{url}/object_info/{NODE}", timeout=5) and models(cfg)["unet"] in _choices(url, "UNETLoader", "unet_name"):
+            return "qwen21"
+        if comfy.http_json(f"{url}/object_info/{EDIT_NODE}", timeout=5) and edit_models(url, cfg):
+            return "qwen_edit"
+    except Exception:  # noqa: BLE001 — 꺼져 있거나 다른 ComfyUI
+        return None
+    return None
+
+
 def check(url, cfg=None):
     """그 ComfyUI에 편집 노드와 모델 파일이 있는지."""
-    try:
-        if not comfy.http_json(f"{url}/object_info/{NODE}", timeout=5):
-            return False
-        unets = comfy.http_json(f"{url}/object_info/UNETLoader", timeout=10)["UNETLoader"]["input"]["required"]["unet_name"][0]
-    except Exception:  # noqa: BLE001 — 꺼져 있거나 다른 ComfyUI
-        return False
-    return models(cfg or {})["unet"] in unets
+    return backend(url, cfg) is not None
 
 
 def find(cfg):
@@ -68,6 +108,36 @@ def workflow(image, prompt, seed, prefix, cfg):
     }
 
 
+def workflow_edit(image, prompt, seed, prefix, m):
+    """ComfyUI 공식 Qwen-Image-Edit(2509·2511) 워크플로 (공식 예제와 같은 짜임). Lightning 4단계 LoRA가 있으면 4단계·CFG 1."""
+    fast = bool(m.get("lora"))
+    wf = {
+        "q_unet": {"class_type": "UNETLoader", "inputs": {"unet_name": m["unet"], "weight_dtype": "default"}},
+        "q_clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": m["clip"], "type": "qwen_image", "device": "default"}},
+        "q_vae": {"class_type": "VAELoader", "inputs": {"vae_name": m["vae"]}},
+        "q_img": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "q_scale": {"class_type": "ImageScaleToTotalPixels", "inputs": {"image": ["q_img", 0], "upscale_method": "lanczos",
+                                                                         "megapixels": 1.0, "resolution_steps": 1}},
+        "q_pos": {"class_type": EDIT_NODE, "inputs": {"clip": ["q_clip", 0], "prompt": prompt, "vae": ["q_vae", 0],
+                                                      "image1": ["q_scale", 0]}},
+        "q_neg": {"class_type": EDIT_NODE, "inputs": {"clip": ["q_clip", 0], "prompt": "", "vae": ["q_vae", 0],
+                                                      "image1": ["q_scale", 0]}},
+        "q_latent": {"class_type": "VAEEncode", "inputs": {"pixels": ["q_scale", 0], "vae": ["q_vae", 0]}},
+        "q_shift": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["q_lora" if fast else "q_unet", 0], "shift": 3.0}},
+        "q_norm": {"class_type": "CFGNorm", "inputs": {"model": ["q_shift", 0], "strength": 1.0}},
+        "q_sample": {"class_type": "KSampler", "inputs": {"model": ["q_norm", 0], "positive": ["q_pos", 0], "negative": ["q_neg", 0],
+                                                         "latent_image": ["q_latent", 0], "seed": seed,
+                                                         "steps": 4 if fast else 20, "cfg": 1.0 if fast else 2.5,
+                                                         "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+        "q_decode": {"class_type": "VAEDecode", "inputs": {"samples": ["q_sample", 0], "vae": ["q_vae", 0]}},
+        "q_save": {"class_type": "SaveImage", "inputs": {"images": ["q_decode", 0], "filename_prefix": prefix}},
+    }
+    if fast:
+        wf["q_lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["q_unet", 0], "lora_name": m["lora"],
+                                                                        "strength_model": 1.0}}
+    return wf
+
+
 def splice(orig, edit, thr=14.0):
     """편집 AI가 크게 바꾼 곳(색 차이 thr 넘음)만 편집 결과로, 나머지는 원래 픽셀 그대로 (몸이 미세하게 달라지지 않게)."""
     lab = lambda im: cv2.cvtColor(im, cv2.COLOR_RGB2LAB).astype(np.float32)   # noqa: E731
@@ -75,6 +145,16 @@ def splice(orig, edit, thr=14.0):
     m = cv2.dilate(cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)), np.ones((5, 5), np.uint8))
     soft = cv2.GaussianBlur(m.astype(np.float32), (0, 0), 1.5)[..., None]
     return (orig * (1 - soft) + edit * soft).astype(np.uint8)
+
+
+def merge_edit(orig, edit):
+    """편집 결과를 원래 프레임에 합친다: 크게 바뀐 곳만 편집 결과로(splice), 편집 결과에서 배경인 곳은 원래 영상의
+    배경색으로. 공식 Qwen-Image-Edit은 '순수 마젠타'라고 해도 배경을 짙은 분홍(215, 40, 134)으로 칠해서, 그대로 두면
+    그 장만 배경색이 달라 자동 점검이 '배경색 바뀜'으로 잘못 잡는다 (따내기 자체는 크로마키가 짙은 분홍도 잘 딴다)."""
+    out = splice(orig, edit)
+    background = frame_alpha(edit, estimate_bg(edit)) < 0.5
+    out[background] = np.asarray(estimate_bg(orig)).round().astype(np.uint8)
+    return out
 
 
 def _post(url, path, body):
@@ -89,7 +169,7 @@ def _idle(url):
 
 def repair_frame(src, dst, edit_url, video_url, cfg, seed=11):
     """src 프레임에서 빛 효과를 지운 그림을 dst에 쓴다."""
-    if video_url and video_url != edit_url:
+    if video_url:                                    # 같은 ComfyUI여도 영상을 만드는 중이면 그 뒤로 밀리니 막는다
         try:
             if not _idle(video_url):
                 raise RuntimeError("영상 AI가 만드는 중이라 지금은 고칠 수 없어요 (그래픽카드를 같이 써요). 끝난 뒤에 해 주세요")
@@ -100,8 +180,14 @@ def repair_frame(src, dst, edit_url, video_url, cfg, seed=11):
             pass
     orig = np.asarray(Image.open(src).convert("RGB"))
     name = comfy.upload(edit_url, src, f"repair_{uuid.uuid4().hex[:8]}.png")
-    entry, _ = comfy.wait(edit_url, comfy.queue(edit_url, workflow(name, PROMPT, seed, "38sprite_repair/frame", cfg),
-                                                uuid.uuid4().hex))
+    kind = backend(edit_url, cfg)
+    if kind == "qwen_edit":
+        wf = workflow_edit(name, PROMPT, seed, "38sprite_repair/frame", edit_models(edit_url, cfg))
+    elif kind == "qwen21":
+        wf = workflow(name, PROMPT, seed, "38sprite_repair/frame", cfg)
+    else:
+        raise RuntimeError("이미지 편집 AI(Qwen-Image edit)를 찾지 못했어요")
+    entry, _ = comfy.wait(edit_url, comfy.queue(edit_url, wf, uuid.uuid4().hex))
     tmp = Path(dst).parent / "_edit"
     files = comfy.download(edit_url, entry, tmp)
     edit = np.asarray(Image.open(files[0]).convert("RGB").resize((orig.shape[1], orig.shape[0]), Image.LANCZOS))
@@ -112,7 +198,7 @@ def repair_frame(src, dst, edit_url, video_url, cfg, seed=11):
     except OSError:
         pass
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(splice(orig, edit)).save(dst)
+    Image.fromarray(merge_edit(orig, edit)).save(dst)
     try:
         _post(edit_url, "/free", {"unload_models": True, "free_memory": True})
     except Exception:  # noqa: BLE001

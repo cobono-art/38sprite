@@ -100,7 +100,7 @@ EDIT_CACHE = {"t": 0.0, "url": None}
 
 
 def edit_url(cfg, max_age=60):
-    """'이 장 효과 지우기'에 쓸 편집 AI ComfyUI (Qwen-Image 2.1 edit). 상태를 30초마다 물어서 60초 동안 기억한다."""
+    """'이 장 효과 지우기'에 쓸 편집 AI ComfyUI (Qwen-Image 2.1 edit 또는 공식 Qwen-Image-Edit). 상태를 30초마다 물어서 60초 동안 기억한다."""
     if time.time() - EDIT_CACHE["t"] > max_age:
         EDIT_CACHE.update(t=time.time(), url=repair.find(cfg))
     return EDIT_CACHE["url"]
@@ -568,7 +568,7 @@ async def repair_frame(request):
     cfg = store.load_config()
     url = await blocking(edit_url, cfg, 0)
     if not url:
-        return bad("이미지 편집 AI(Qwen-Image 2.1 edit)가 있는 ComfyUI를 찾지 못했어요")
+        return bad("이미지 편집 AI(Qwen-Image-Edit)가 있는 ComfyUI를 찾지 못했어요")
     mdir = store.project_dir(pid) / "motions" / mid
     frame = picked[slot]
     files = sorted((mdir / "frames" / src).glob("*.png"))
