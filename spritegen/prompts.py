@@ -92,7 +92,9 @@ def redraw_prompt(d, deg, style="hd", pixel_height=64):
 # 같은 시드에서 큰 칼 궤적이 사라지고(효과량 895k → 184~432k) 휘두르는 동작은 그대로였다.
 CAMERA = "Locked-off static camera that stays perfectly still at the same angle and framing for the whole video. "
 # 배경은 처음부터 끝까지 마젠타 한 색: 영상 AI가 효과 장면에서 배경을 다른 색으로 바꾸거나 무늬를 그리면 크로마키로
-# 깨끗하게 오릴 수 없다. 바뀌는 건 시드가 정해서(2026-10-08 실험) 받자마자 검사해 새 시드로 다시 만든다(bg_retry).
+# 깨끗하게 오릴 수 없다. 바뀔지는 시드가 정해서(2026-10-08 실험) 받자마자 검사해 새 시드로 다시 만든다(bg_retry).
+# 첫 장면이 마젠타여도 이 문장은 필요하다 — 2026-10-09 같은 시드 5개씩, 문장을 빼면 배경이 파랑·청록으로 바뀐 장면이
+# 걷기 3 → 46장, 마법 18 → 64장(각 125장 중)으로 늘었다.
 BG_MAGENTA = ("The background is one flat, uniform, solid magenta (#FF00FF) chroma-key color in every single frame, from "
               "the first frame to the last, the same pure magenta from edge to edge. ")
 BG_GRAY = "The plain flat gray studio background stays exactly the same in every frame. "
