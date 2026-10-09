@@ -3,6 +3,47 @@
 버전은 [깃허브 릴리스](https://github.com/cobono-art/38sprite/releases) 태그와 같습니다. 앱 화면 왼쪽 위에서 지금 버전을 볼 수 있어요.
 Versions match the [GitHub release](https://github.com/cobono-art/38sprite/releases) tags. The app shows its version at the top left.
 
+## v0.5.0 — 2026-10-09
+
+**도트 / Pixel art**
+- Codex는 키 64칸으로 지시해도 실제로는 약 74칸으로 그립니다. 그래서 64칸으로 줄이면 눈·허리띠·지팡이 구슬이
+  뭉개졌습니다. 방향 그림에서 도트 한 칸 크기를 재서 결과를 그 키로 만듭니다(방향 그림 아래 '도트 키 N칸',
+  설정 `pixel_auto_height`). 못 재거나 도트 그림이 아니면 설정한 키를 씁니다.
+- 도트 마감에서 작은 잡티를 둘레 색으로 합치고, 장마다 색이 바뀌는 지글거림을 줄였습니다.
+- 시험: Codex 그림을 진짜 도트로 먼저 정리해서 영상을 만드는 방식(정수배 격자)은 이득이 없었습니다. 영상 AI가
+  움직이는 동안 격자를 지키지 않아서, 그대로 만들고 마지막에 정리합니다.
+- Codex draws about 74 pixels tall when asked for 64; the pixel height is now measured from the drawn pixel grid so one
+  sprite pixel matches one pixel of the art (`pixel_auto_height`). Small specks are merged and color flicker reduced.
+
+**마젠타 / Magenta**
+- Codex 방향 그림과 한 방향 다시 그리기도 마젠타 배경으로 그립니다. 회색 배경은 지팡이 테두리에 회색 잔테두리,
+  몸과의 틈에 회색이 남았습니다.
+- 3D 마네킹 모드 생성 단계를 4 → 6으로 늘렸습니다. 4단계는 시드 40%쯤이 배경을 얼룩·동심원으로 망가뜨려 다시
+  만들어야 했습니다(설정 `turbo_r2v_steps`).
+- 영상 프롬프트의 "배경은 마젠타" 문장은 그대로 둡니다(빼 보니 배경이 바뀐 장면이 걷기 3 → 46장, 마법 18 → 64장).
+- Direction drawings are made on magenta too, and the 3D mannequin mode uses 6 steps instead of 4 (4 broke about 40%
+  of backgrounds).
+
+**걷기·달리기 / Walks and runs**
+- 디딘 발을 따라가 발이 미끄러지지 않는 이동 속도를 재고(`move_speed`), '게임처럼 걸어 보기'로 땅이 움직이는
+  화면을 보며 속도를 맞출 수 있습니다(0.3~3배, 시트 JSON에 반영).
+- The movement speed is measured from the planted foot, and "Walk like in a game" previews the motion over a scrolling
+  ground to tune it.
+
+**남은 효과 지우기 (선택) / Fix leftover effects (optional)**
+- 칸을 골라 '이 장 효과 지우기'를 누르면 이미지 편집 AI(Qwen-Image 2.1 edit)가 그 장의 빛 효과만 지우고 시트를
+  다시 만듭니다. '원래 장면으로'로 되돌립니다. 편집 모델이 있는 ComfyUI가 따로 필요합니다(설정 `edit_url`).
+- "Remove effects in this frame" erases leftover light effects in one frame with an image-editing AI; "Original frame"
+  undoes it.
+
+**3D 마네킹 / 3D mannequin**
+- 같은 사람 모델을 2~3등신으로 만든 마네킹을 고를 수 있습니다(`mannequin_body: chibi`). 시험에서는 어른 모델과
+  결과가 거의 같아 기본은 그대로입니다.
+- A chibi-proportioned mannequin is available (`mannequin_body: chibi`); it tested about the same, so it is not the default.
+
+**홍보 영상 / Promo video**
+- 여러 캐릭터가 같이 추는 춤 장면도 스프라이트 프레임(초당 10장)으로 바꿨습니다.
+
 ## v0.4.0 — 2026-10-09
 
 **빛 궤적 빼기 / Light-trail removal**
