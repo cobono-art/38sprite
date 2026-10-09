@@ -275,7 +275,8 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
     seq_len: 프레임이 seq_len장씩 한 애니메이션(한 방향)이면, 앞 장과 표가 거의 같은 픽셀(차이 hold표 이내, 기본 칸의
     30%)은 앞 장 색을 그대로 써서 장마다 색이 바뀌는 지글거림을 줄인다 (어두운 색↔밝은 색으로는 안 바꾼다).
     2026-10-09 시험(키 64px, 대기·걷기 정면·옆): 지글거림 대기 0.164→0.121·0.109→0.066, 걷기 0.398→0.332, 눈·선 유지.
-    no_hold_from: 이 번호부터는 앞 장과 묶지 않는다 (같은 팔레트로 따로 도트화할 그림을 뒤에 붙일 때, 예: 원본 첫 장면)."""
+    no_hold_from: 이 번호부터는 앞 장과 묶지 않는다 (같은 팔레트로 따로 도트화할 그림을 뒤에 붙일 때, 예: 원본 첫 장면).
+    outline: True(실루엣 바깥에 한 줄 덧두르기) | "inside"(안쪽 한 줄을 외곽선으로, 원본에 외곽선이 있을 때) | False."""
     h0, w0 = rgba_frames[0].shape[:2]
     width = max(1, round(w0 * height / h0))
     big_w, big_h = width * cluster, height * cluster
@@ -350,7 +351,18 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
             prev = (q, a)
 
         img = np.dstack([palette[q], (a * 255).astype(np.uint8)])
-        if outline:
+        if outline == "inside":
+            # 원본에 외곽선이 있는 그림(코덱스 도트): 바깥에 한 줄을 더 두르면 원본 외곽선과 겹쳐 두 겹이 된다
+            # (2026-10-09 측정: 바깥 줄 83%·안쪽 줄 46%가 어두움). 실루엣 안쪽 한 줄에서 어둡지 않은 칸만 가장 가까운 어두운
+            # 팔레트 색으로 → 키는 그대로, 외곽선은 한 줄로 닫힌다.
+            edge = a & ~cv2.erode(a.astype(np.uint8), np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], np.uint8)).astype(bool)
+            fix = edge & ~dark[q]
+            if fix.any() and dark.any():
+                want = img[..., :3].astype(np.float32) * 0.35
+                dpal = pal_f[dark]
+                pick = np.argmin(((want[fix][:, None, :] - dpal) ** 2).sum(-1), axis=1)
+                img[fix, :3] = palette[dark][pick]
+        elif outline:
             # 실루엣 바깥 1px에 맞닿은 색을 어둡게 한 외곽선
             ring = cv2.dilate(a.astype(np.uint8), np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], np.uint8)).astype(bool) & ~a
             src = np.zeros_like(img[..., :3], dtype=np.float32)
@@ -364,6 +376,20 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
             img[ring, 3] = 255
         out.append(img)
     return out, palette
+
+
+def has_outline(refs, band=7, dark_luma=80, share=0.45):
+    """원화(RGBA 목록)에 어두운 외곽선이 있는지: 실루엣 가장자리 띠(band px)에서 어두운 픽셀 비율이 share 이상.
+    코덱스 도트 그림은 한 칸 굵기 검은 외곽선이 있어서, 도트 변환이 바깥에 한 줄을 더 두르면 두 겹이 된다."""
+    vals = []
+    for r in refs:
+        a = (r[..., 3] > 127).astype(np.uint8)
+        if a.sum() < 100:
+            continue
+        edge = a.astype(bool) & ~cv2.erode(a, np.ones((band, band), np.uint8)).astype(bool)
+        luma = r[..., :3].astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)
+        vals.append(float((luma[edge] < dark_luma).mean()))
+    return bool(vals) and float(np.mean(vals)) >= share
 
 
 def head_mask(ref):

@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 import helpers  # noqa: F401 — 저장소 폴더를 sys.path에 (이 파일만 돌려도 되게)
 
-from spritegen.imaging import head_mask, keep_head, merge_specks, pixel_cell_size, pixelate
+from spritegen.imaging import has_outline, head_mask, keep_head, merge_specks, pixel_cell_size, pixelate
 
 
 class PixelTest(unittest.TestCase):
@@ -108,6 +108,28 @@ class PixelTest(unittest.TestCase):
         self.assertEqual(n, 1)
         self.assertTrue((out[0][3:15] == ref[2:14]).all())   # 원본 머리를 한 칸 아래에
         self.assertTrue((out[1] == other).all())
+
+    def test_inside_outline_keeps_size_and_single_line(self):
+        """외곽선이 있는 원화는 '있음'으로 보고, 안쪽 한 줄 방식은 키를 늘리지 않으면서 가장자리를 어둡게 닫는다
+        (바깥 덧두르기는 실루엣이 한 칸씩 커진다)."""
+        art = np.zeros((120, 80, 4), np.uint8)
+        art[10:110, 10:70] = (230, 180, 40, 255)
+        plain = art.copy()
+        art[10:110, 10:70][:6] = art[10:110, 10:70][-6:] = (20, 16, 24, 255)        # 굵기 6px 검은 외곽선
+        art[10:110, 10:16] = art[10:110, 64:70] = (20, 16, 24, 255)
+        self.assertTrue(has_outline([art]))
+        self.assertFalse(has_outline([plain]))
+        frames = [plain.copy() for _ in range(2)]
+        none, _ = pixelate(frames, 40, 6, outline=False, palette_ref=[art])
+        out, _ = pixelate(frames, 40, 6, outline=True, palette_ref=[art])
+        ins, _ = pixelate(frames, 40, 6, outline="inside", palette_ref=[art])
+        rows = lambda im: int((im[..., 3] > 0).any(1).sum())   # noqa: E731
+        self.assertEqual(rows(ins[0]), rows(none[0]))
+        self.assertEqual(rows(out[0]), rows(none[0]) + 2)
+        a = ins[0][..., 3] > 0
+        ys, xs = np.nonzero(a)
+        luma = ins[0][..., :3].astype(float) @ [0.299, 0.587, 0.114]
+        self.assertLess(luma[ys.min(), xs[ys == ys.min()][len(xs[ys == ys.min()]) // 2]], 70)   # 윗변 가운데가 어둡다
 
 if __name__ == "__main__":
     unittest.main()

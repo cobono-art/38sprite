@@ -19,7 +19,7 @@ from .assemble import assemble, retime
 from .directions import detect_cells, directions_for, facing_problems, first_frames, generated_directions
 from .effects import remove_effects
 from .imaging import (KEY_MAGENTA, cutout_any, cutout_rgba, bg_pattern, estimate_bg, frame_alpha, frames_to_webp, load_frames,
-                      load_ref, pixel_cell_size, sheet_alpha)
+                      has_outline, load_ref, pixel_cell_size, sheet_alpha)
 from .prompts import follow_prompt, mannequin_prompt, motion_prompt, redraw_prompt, reference_prompt, sheet_prompt
 from . import mannequin as mq
 
@@ -925,6 +925,9 @@ def assemble_motion(pid, mid, extra=None):
     master = m.get("master") or pick_master(gen)
     refs = [load_ref(mdir / "first" / f"{d}.png") for d in gen] if s["style"] == "pixel" else None
     pixel_h = pixel_height_for(p, m, sheet_rgb)
+    # 원본에 외곽선이 있는 도트 그림은 바깥에 덧두르지 않고 안쪽 한 줄을 외곽선으로 (덧두르면 두 겹이 된다, 설정 pixel_outline)
+    outline_mode = store.load_config().get("pixel_outline", "auto")
+    px_outline = "inside" if refs and (outline_mode == "inside" or (outline_mode == "auto" and has_outline(refs))) else True
     report = assemble({d: mdir / "frames" / d for d in gen}, s["count"], size, meta["feet_y"], mdir / "out",
                       kind=m["kind"], n_frames=m.get("frames", 8),
                       pixel_height=pixel_h, palette_refs=refs,
@@ -933,7 +936,8 @@ def assemble_motion(pid, mid, extra=None):
                       char_px=char_h * size[1], overrides=m.get("frame_overrides"),
                       hold_end=oneshot and m.get("hold_end", False), effects=effects_of(m), loop_span=span,
                       matting=matting.enabled(), locomotion=is_locomotion(m),
-                      keep_heads=s["style"] == "pixel" and store.load_config().get("pixel_keep_head", True), move_scale=float(m.get("move_scale") or 1.0),
+                      keep_heads=s["style"] == "pixel" and store.load_config().get("pixel_keep_head", True), px_outline=px_outline,
+                      move_scale=float(m.get("move_scale") or 1.0),
                       ground_y=max(0.25, float(np.sin(np.radians(mannequin_elevation(s["angle"]))))),
                       loop_from=("S" if "S" in gen else master)        # 박자 기준은 정면 (옆모습은 실루엣 신호가 달라 어긋남을 못 잰다)
                       if not oneshot and (m.get("source") == "video" or m.get("mode") in ("mannequin", "master")) else None)
