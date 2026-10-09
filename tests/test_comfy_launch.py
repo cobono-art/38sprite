@@ -32,6 +32,20 @@ class ComfyLaunchTest(unittest.TestCase):
                          ["--windows-standalone-build"])
         self.assertIsNone(cl.script_args(["python.exe", "server.py"]))
 
+    def test_video_root_uses_remembered_python(self):
+        """ComfyUI가 여러 개인 PC: 기억해 둔 영상 AI ComfyUI의 파이썬(comfy_python)으로 그 ComfyUI 폴더를 찾는다."""
+        with tempfile.TemporaryDirectory() as td:
+            portable = Path(td) / "ComfyUI_windows_portable"
+            py = portable / "python_embeded" / "python.exe"
+            py.parent.mkdir(parents=True)
+            py.write_text("")
+            (portable / "ComfyUI").mkdir()
+            (portable / "ComfyUI" / "main.py").write_text("")
+            self.assertEqual(cl.video_python({"comfy_python": str(py)}), str(py))
+            self.assertEqual(Path(cl.video_root({"comfy_python": str(py)})), (portable / "ComfyUI").resolve())
+            missing = str(Path(td) / "nope" / "python.exe")
+            self.assertNotEqual(cl.video_python({"comfy_python": missing}), missing)   # 없는 경로면 앱의 파이썬
+
     def test_split_cmdline_keeps_quoted_paths(self):
         args = cl.split_cmdline(r'"C:\Program Files\py thon.exe" -u main.py --port 8189')
         self.assertEqual(args, [r"C:\Program Files\py thon.exe", "-u", "main.py", "--port", "8189"])

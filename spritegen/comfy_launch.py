@@ -35,6 +35,19 @@ def comfy_root(python=None):
     return None
 
 
+def video_python(cfg):
+    """영상 AI ComfyUI의 파이썬: 켜져 있을 때 기억해 둔 것(설정 comfy_python), 없으면 앱을 돌리는 파이썬.
+    ComfyUI가 여러 개인 PC(예: 이미지 편집용 ComfyUI가 따로 켜져 있음)에서는 run_app.bat이 고른 파이썬이 영상 AI 쪽이
+    아닐 수 있다 (2026-10-09 새로 받아 시험: ArtPlatform ComfyUI의 파이썬을 골라 노드 확인·자동 켜기가 엉뚱한 곳을 봄)."""
+    py = cfg.get("comfy_python")
+    return py if py and Path(py).exists() else sys.executable
+
+
+def video_root(cfg):
+    """영상 AI ComfyUI 폴더 (main.py가 있는 곳) 또는 None."""
+    return comfy_root(video_python(cfg))
+
+
 def node_installed(root):
     return bool(root) and (Path(root) / "custom_nodes" / NODE_DIR / "__init__.py").exists()
 
@@ -120,23 +133,23 @@ def port_open(port, timeout=1.0):
 def autostart(cfg, url):
     """ComfyUI가 꺼져 있고 이 PC에 있으면 켠다 → 켰으면 True. 노드가 깔려 있으면 노드를 허용하는 옵션을 붙인다."""
     port = local_port(url)
-    root = comfy_root()
+    root = video_root(cfg)
     if not port or not root or not cfg.get("comfy_autostart", True):
         return False
     args = cfg.get("comfy_args") or default_args(port)
     if node_installed(root):
         args = with_node(args)
-    start(root, sys.executable, args)
+    start(root, video_python(cfg), args)
     return True
 
 
 def restart_with_node(url, wait=30):
     """노드 없이 켜져 있는 ComfyUI를 같은 옵션 + 노드 허용으로 다시 켠다 → 새 옵션. 실패하면 RuntimeError."""
     port = local_port(url)
-    root = comfy_root()
+    proc = running(port) if port else None
+    root = comfy_root(proc.get("exe")) if proc and proc.get("exe") else comfy_root()
     if not port or not root:
         raise RuntimeError("이 PC의 ComfyUI가 아니라서 다시 켤 수 없어요")
-    proc = running(port)
     if not proc:
         raise RuntimeError("켜져 있는 ComfyUI를 찾지 못했어요")
     args = with_node(proc["args"])

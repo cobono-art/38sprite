@@ -8,6 +8,9 @@ rem 38Sprite가 직접 만든 노드라 따로 받는 것은 없다.
 set "COMFY="
 set "PY="
 if exist "python_path.txt" for /f "usebackq delims=" %%P in ("python_path.txt") do set "PY=%%P"
+rem 앱이 기억해 둔 영상 AI ComfyUI 폴더 먼저 (ComfyUI가 여러 개면 python_path.txt의 파이썬이 다른 ComfyUI 것일 수 있다)
+if defined PY for /f "usebackq delims=" %%C in (`"%PY%" -s app\comfy_dir.py 2^>nul`) do if exist "%%C\custom_nodes" set "COMFY=%%C"
+if defined COMFY goto copy
 if defined PY for %%D in ("%PY%") do set "PYDIR=%%~dpD"
 if defined PYDIR if exist "%PYDIR%..\ComfyUI\custom_nodes" set "COMFY=%PYDIR%..\ComfyUI"
 if not defined COMFY if defined PYDIR if exist "%PYDIR%..\..\custom_nodes" set "COMFY=%PYDIR%..\.."

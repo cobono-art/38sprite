@@ -110,7 +110,7 @@ def edit_url(cfg, max_age=60):
 async def status(_):
     cfg = store.load_config()
     comfy_info, codex_info = await asyncio.gather(blocking(comfy.check, cfg["comfy_url"]), blocking(codex.check))
-    root = comfy_launch.comfy_root()
+    root = comfy_launch.video_root(cfg)
     return web.json_response({"config": cfg, "comfy": comfy_info, "codex": codex_info,
                               "presets": ANGLE_PRESETS, "dir_names": NAME_KO, "effect_words": EFFECT_WORDS,
                               "pose": pose_tools() is not None, "matting": matting.enabled(),
@@ -121,12 +121,16 @@ async def status(_):
 
 
 def remember_comfy_args(url):
-    """켜져 있는 ComfyUI의 실행 옵션을 config.json에 기억한다 (다음에 꺼져 있으면 앱이 똑같이 켠다)."""
+    """켜져 있는 ComfyUI의 실행 옵션과 파이썬을 config.json에 기억한다 (다음에 꺼져 있으면 앱이 똑같이 켜고,
+    노드 설치·확인도 그 ComfyUI에 한다 — ComfyUI가 여러 개인 PC에서 앱을 돌리는 파이썬이 다른 ComfyUI 것일 수 있다)."""
     proc = comfy_launch.running(comfy_launch.local_port(url))
     if proc:
         user = store.user_config()
-        if user.get("comfy_args") != proc["args"]:
+        changed = user.get("comfy_args") != proc["args"] or (proc.get("exe") and user.get("comfy_python") != proc["exe"])
+        if changed:
             user["comfy_args"] = proc["args"]
+            if proc.get("exe"):
+                user["comfy_python"] = proc["exe"]
             store.save_config(user)
     return proc
 
