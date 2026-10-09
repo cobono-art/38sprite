@@ -265,7 +265,7 @@ def merge_specks(q, a, k, protect, max_size=2):
 
 
 def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=None,
-             dark_share=0.40, dark_luma=70, smooth=0, majority=True, seq_len=None, hold=None, speck=3):
+             dark_share=0.40, dark_luma=70, smooth=0, majority=True, seq_len=None, hold=None, speck=3, no_hold_from=None):
     """픽셀아트 마감: 공유 팔레트로 먼저 색을 정한 뒤, cluster x cluster 칸마다 가장 많은 색을 골라 줄인다
     (평균을 내지 않아 섞인 중간색이 생기지 않음). 칸 안에 어두운 색(밝기 dark_luma 미만, 눈·선)이
     dark_share 이상이면 그 색을 살린다 (sprite-gen의 detail bias와 같은 기준).
@@ -274,7 +274,8 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
     다수결로 면 안의 잡티를 정리하고, speck 픽셀 이하 작은 색 조각은 둘레 색으로 합치고, 실루엣에 1px 외곽선을 두른다.
     seq_len: 프레임이 seq_len장씩 한 애니메이션(한 방향)이면, 앞 장과 표가 거의 같은 픽셀(차이 hold표 이내, 기본 칸의
     30%)은 앞 장 색을 그대로 써서 장마다 색이 바뀌는 지글거림을 줄인다 (어두운 색↔밝은 색으로는 안 바꾼다).
-    2026-10-09 시험(키 64px, 대기·걷기 정면·옆): 지글거림 대기 0.164→0.121·0.109→0.066, 걷기 0.398→0.332, 눈·선 유지."""
+    2026-10-09 시험(키 64px, 대기·걷기 정면·옆): 지글거림 대기 0.164→0.121·0.109→0.066, 걷기 0.398→0.332, 눈·선 유지.
+    no_hold_from: 이 번호부터는 앞 장과 묶지 않는다 (같은 팔레트로 따로 도트화할 그림을 뒤에 붙일 때, 예: 원본 첫 장면)."""
     h0, w0 = rgba_frames[0].shape[:2]
     width = max(1, round(w0 * height / h0))
     big_w, big_h = width * cluster, height * cluster
@@ -310,7 +311,7 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
     hold = max(2, round(0.3 * cluster * cluster)) if hold is None else hold
     prev = None                                      # (색 번호, 불투명) — 같은 애니메이션의 앞 장
     for fi, (rgb, m) in enumerate(mids):
-        if seq_len and fi % seq_len == 0:
+        if (seq_len and fi % seq_len == 0) or (no_hold_from is not None and fi >= no_hold_from):
             prev = None
         idx = np.argmin(((rgb[..., None, :] - pal_f) ** 2).sum(-1), axis=-1)
         blocks = idx.reshape(height, cluster, width, cluster).transpose(0, 2, 1, 3).reshape(height, width, -1)
@@ -363,6 +364,73 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
             img[ring, 3] = 255
         out.append(img)
     return out, palette
+
+
+def head_mask(ref):
+    """도트 그림에서 머리: 위에서부터 목(캐릭터 위쪽 15~55% 중 가장 좁은 줄)까지. 뚜렷한 목이 없으면 위 30%."""
+    a = ref[..., 3] > 0
+    rows = np.where(a.any(1))[0]
+    if len(rows) < 8:
+        return np.zeros_like(a)
+    top, bot = rows[0], rows[-1]
+    h = bot - top + 1
+    w = np.convolve(a.sum(1).astype(float), np.ones(3) / 3, mode="same")
+    lo, hi = top + int(0.15 * h), top + int(0.55 * h)
+    neck = lo + int(np.argmin(w[lo:hi]))
+    if w[neck] > 0.8 * w[top:neck].max():
+        neck = top + int(0.30 * h)
+    m = np.zeros_like(a)
+    m[top:neck] = a[top:neck]
+    return m
+
+
+def keep_head(frames, ref, search=4, thr=0.65):
+    """도트 장면마다 원본 첫 장면(ref, 같은 칸·같은 팔레트로 도트화)의 머리가 가장 잘 맞는 자리(±search칸)를 찾아, 잘 맞으면
+    (머리 픽셀의 thr 이상이 비슷한 색) 그 자리에 원본 머리를 그대로 붙인다 → (장면들, 붙인 장 수).
+    영상 AI를 거치면 장면마다 눈 모양·크기와 후드 윤곽이 달라지는데(얼굴 지글거림), 머리는 걸을 때 거의 그대로 오르내리기만
+    해서 원본 머리를 옮겨 붙이면 원본 그림의 얼굴이 모든 장면에서 똑같이 나온다 (도트 작가가 걷기를 그리는 방식).
+    2026-10-09 도트 걷기 5방향: 일치 0.74~0.91로 모든 장면에 붙음. 머리가 돌거나 가려지면 덜 맞아서 안 붙인다.
+    붙인 머리 둘레 2칸과 위쪽 띠에 남은 예전 머리 픽셀(머리 색이거나 외곽선)은 지운다 (두 겹 윤곽·윗선이 남지 않게)."""
+    mask = head_mask(ref)
+    ys, xs = np.nonzero(mask)
+    if len(ys) < 20:
+        return list(frames), 0
+    lr = cv2.cvtColor(np.ascontiguousarray(ref[..., :3]), cv2.COLOR_RGB2LAB).astype(np.float32)
+    head_cols = {tuple(c) for c in ref[mask][:, :3]}
+    H, W = mask.shape
+    out, pasted = [], 0
+    for f in frames:
+        lf = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_RGB2LAB).astype(np.float32)
+        best = (-1.0, 0, 0)
+        for dy in range(-search, search + 1):
+            for dx in range(-search, search + 1):
+                yy, xx = ys + dy, xs + dx
+                ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+                if ok.mean() < 0.95:
+                    continue
+                hit = (f[yy[ok], xx[ok], 3] > 0) & (np.linalg.norm(lf[yy[ok], xx[ok]] - lr[ys[ok], xs[ok]], axis=-1) < 22)
+                best = max(best, (float(hit.mean()), dy, dx))
+        score, dy, dx = best
+        if score < thr:
+            out.append(f)
+            continue
+        g = f.copy()
+        yy, xx = ys + dy, xs + dx
+        ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+        placed = np.zeros_like(mask)
+        placed[yy[ok], xx[ok]] = True
+        near = cv2.dilate(placed.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool) & ~placed
+        top, x_lo, x_hi = ys.min() + dy, xs.min() + dx - 1, xs.max() + dx + 2   # 붙인 머리 위쪽 띠 (원래 머리가 더 위에 있었으면 남는 윗선)
+        near[max(0, top - search - 1):max(0, top), max(0, x_lo):min(W, x_hi)] = True
+        luma = g[..., :3].astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)
+        headish = np.zeros_like(mask)
+        for y, x in zip(*np.nonzero(near & (g[..., 3] > 0))):
+            headish[y, x] = tuple(g[y, x, :3]) in head_cols or luma[y, x] < 40
+        g[headish & (np.arange(H)[:, None] <= ys.max() + dy)] = 0       # 목 아래(몸)는 건드리지 않는다
+        g[yy[ok], xx[ok]] = ref[ys[ok], xs[ok]]
+        out.append(g)
+        pasted += 1
+    return out, pasted
 
 
 def pixel_cell_size(rgb, regions, lo=3.5, hi=12.0, min_score=1.7):

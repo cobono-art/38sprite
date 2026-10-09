@@ -14,7 +14,7 @@ from . import qa
 from .comfy import FPS
 from .directions import SHEET_ORDER, preview_layout, source_of
 from .effects import remove_effects
-from .imaging import (bbox, bg_pattern, cutout_any, estimate_bg, frame_alpha, find_cycle, load_frames, pixelate, save_gif,
+from .imaging import (bbox, bg_pattern, cutout_any, estimate_bg, frame_alpha, find_cycle, keep_head, load_frames, pixelate, save_gif,
                       thumbnails)
 
 
@@ -202,7 +202,8 @@ def analyze_direction(frames_dir, kind, n_frames, strip_effects=False, window=No
             rgba, removed = remove_effects(rgba, first, alphas, picks, bg)
             rep["effect_px_removed"] = removed
     boxes = [bbox(im[..., 3] / 255.0) if im[..., 3].any() else bbox(alphas[i]) for im, i in zip(rgba, picks)]
-    return {"rgba": rgba, "boxes": boxes, "fps": fps, "report": rep, "layers": layers}
+    first = cutout_any(frames[0], alphas[0], bgs[0])               # 영상 첫 장면 = 원본 그림 (도트 머리 붙이기 기준)
+    return {"rgba": rgba, "boxes": boxes, "fps": fps, "report": rep, "layers": layers, "first": first}
 
 
 def step_length(alphas):
@@ -423,7 +424,8 @@ def layout_frames(rows, count, gap=8):
 def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8, hd_height=256,
              pixel_height=0, colors=20, smooth=24, palette_refs=None, strip_effects=False,
              window=None, window_from=None, char_px=None, hd_char=200, overrides=None, loop_from=None, hold_end=False,
-             effects="none", loop_span=None, matting=False, locomotion=False, ground_y=0.5, move_scale=1.0):
+             effects="none", loop_span=None, matting=False, locomotion=False, ground_y=0.5, move_scale=1.0,
+             keep_heads=False):
     """dir_folders: {만든 방향: 그 방향 PNG 프레임 폴더}. 시트·GIF·report.json을 out_dir에 쓴다.
     한 번 하는 동작에서 window(시작, 끝, 타격 프레임)나 window_from(기준 방향)을 주면 모든 방향을 같은 구간으로 자른다.
     반복 동작에서 loop_from(기준 방향)을 주면 그 방향에서 찾은 반복 구간을 모든 방향에 똑같이 쓴다
@@ -512,17 +514,29 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
             meta["layers"][name] = f"sheet_hd_{name}.png"
         (out_dir / "sheet_hd.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
+    head_report = None
     if pixel_height:
         flat = [im for d in order for im in rows[d]]
         ps = pixel_height / char_px if char_px else pixel_height / (y1 - y0)
-        px, _ = pixelate(flat, max(1, round((y1 - y0) * ps)), colors, palette_ref=palette_refs, smooth=smooth, seq_len=n)
+        firsts = []
+        for d in order:                                # 원본 첫 장면을 같은 칸·같은 팔레트로 (뒤에 붙여 함께 도트화)
+            src, flip = source_of(d, list(done))
+            im = done[src]["first"][y0:y1, x0:x1]
+            firsts.append(np.ascontiguousarray(im[:, ::-1] if flip else im))
+        px, _ = pixelate(flat + firsts, max(1, round((y1 - y0) * ps)), colors, palette_ref=palette_refs, smooth=smooth,
+                         seq_len=n, no_hold_from=len(flat))
         prow = {d: px[k * n:(k + 1) * n] for k, d in enumerate(order)}
+        if keep_heads:
+            kept = {}
+            for k, d in enumerate(order):
+                prow[d], kept[d] = keep_head(prow[d], px[len(flat) + k])
+            head_report = kept
         write_sheet(prow, order, fps, (pivot[0] * ps, pivot[1] * ps), out_dir, "sheet_px", loop,
                     game_info(done, order, kind, fps, ps, hold_end, locomotion, ground_y, move_scale))
         write_gifs(prow, order, count, fps, out_dir, "px")
 
     report = {"kind": kind, "count": count, "order": order, "frames": n, "sprite_fps": round(fps, 2),
-              "common_cycle_frames": cycle,
+              "common_cycle_frames": cycle, "head_kept": head_report,
               "cell_crop": [x0, y0, x1, y1], "char_px": round(char_px, 1) if char_px else None, "sources": sources,
               "directions": {d: r["report"] for d, r in done.items()}}
     try:                                             # 점검이 실패해도 시트는 그대로 쓴다
