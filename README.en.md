@@ -27,8 +27,8 @@ A real result (8-direction walk sheets):
 | Video → 3D mannequin | Extracts a 3D skeleton from every frame of a reference video (MediaPipe), drives the 3D mannequin with it, and has each direction follow it from its own angle, so side and back views do the same move. Without the skeleton tool, Codex reads the video and writes the motion instead. |
 | Basic motion set | Idle, walk, run, attack, hit and death in one click. |
 | Loops · one-shots | Walks and dances are cut into seamless loops; attacks are trimmed to the action. Every direction of a walk or run loops exactly one cycle (two steps), so the cadence stays the same when the character turns. Motions that end in a different pose (like death) are supported. |
-| Directions · camera | 8, 4 or 2 directions, from eye level to top-down (default: 45° high quarter view). |
-| HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. In pixel style the pixel height is measured from the pixel grid Codex actually drew, so one sprite pixel matches one pixel of the art (asked for 64, Codex draws about 74). Small specks are merged into the surrounding color and frame-to-frame color flicker is reduced. The head of the original drawing is pasted where it fits in every frame, so the face stays exactly like the art and doesn't wobble. Pixel style renders its videos at 480 px, about 30% faster. |
+| Directions · camera | 8, 4 or 2 directions, from eye level to top-down (default: 45° high quarter view). Codex draws the character at slightly different sizes per direction; body heights are evened out (up to ±8%) so the character doesn't grow or shrink when it turns. |
+| HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. In pixel style the pixel height is measured from the pixel grid Codex actually drew, so one sprite pixel matches one pixel of the art (asked for 64, Codex draws about 74). Small specks are merged into the surrounding color and frame-to-frame color flicker is reduced. The head of the original drawing is pasted where it fits in every frame, so the face stays exactly like the art and doesn't wobble. If the art already has an outline, the outermost row inside the silhouette becomes the outline instead of adding one outside, so it stays as thin as the art. Pixel style renders its videos at 480 px, about 30% faster. |
 | Light effects | None · vivid · strip (under "Advanced"). Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
 | Magenta from start to end | Everything from the Codex direction drawings to the 3D mannequin mode is made on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated with a new seed (up to twice by default) and the cleanest result is kept. |
 | Light-trail removal (optional) | The video AI (H3) has no negative prompt, and writing "no trails" makes it draw them. A ComfyUI node made for 38Sprite (install with `setup_negative.bat`) removes light trails, sparkles and glows during generation for motions without effects, at the same speed. |
@@ -87,8 +87,10 @@ turnaround ─▶ Codex: 8-direction grid (3×3) ─▶ first frame per directio
 
 1. Start ComfyUI. On the first run the app looks for a running ComfyUI (ports 8188, 8189, 8000) and writes the one
    with the H3 model into `config.json`. If yours is elsewhere, change it in the app's connection settings.
-2. Get this repository and run `run_app.bat`. It uses the Python of the running ComfyUI, or looks in common install
-   locations on drives C–F, and remembers it in `python_path.txt`. If it can't find one, create `python_path.txt` in
+2. Get this repository and run `run_app.bat`. It uses the Python of the running ComfyUI (portable, desktop app or venv),
+   or looks in common install locations on drives C–F and the desktop app's default folder, and remembers it in
+   `python_path.txt`. A stock ComfyUI has no OpenCV; if it's missing, it asks once whether to install it (without
+   touching numpy and the rest). If it can't find one, create `python_path.txt` in
    this folder with the full path to `python.exe` on one line.
 3. `http://127.0.0.1:7870` opens in your browser. Use the KO/EN button at the top to switch the interface language.
    The start screen lists optional tools you haven't installed yet.
@@ -163,6 +165,8 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `pixel_auto_height` | `true` | Use the pixel height measured from the direction sheet's pixel grid (`false` scales down to the height you chose) |
 | `pixel_video_size` | `480` | Video size for pixel style (640 matches HD and is about 30% slower; the pixel result is the same) |
 | `pixel_keep_head` | `true` | Paste the original drawing's head into every pixel frame where it fits (frames where it doesn't fit are left alone) |
+| `pixel_outline` | `auto` | Pixel outline: `auto` (inside row if the art has an outline, otherwise one row outside) · `inside` · `outside` |
+| `even_height` | `true` | Even out body heights across directions (up to ±8%; characters whose directions differ by more than 1.15× are left alone) |
 | `auto_redraw` | `2` | How many times to redraw cells drawn facing the wrong way (0 = only warn) |
 | `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
 | `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
@@ -172,6 +176,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `mannequin_body` | `clay` | 3D mannequin reference: `clay` (bald human model) · `chibi` (the same model with chibi proportions) · `male` · `female` · `off` (capsule mannequin) |
 | `mannequin_bg` | `magenta` | 3D mannequin background: `magenta`, or the old `gray` |
 | `edit_url` | (found automatically) | ComfyUI with the image-editing AI for "Remove effects in this frame" |
+| `comfy_python` | (remembered automatically) | Python of the video-AI ComfyUI, noted from the running video AI and used to auto-start it and to install the trail-removal node (`setup_negative.bat`) on PCs with several ComfyUIs |
 | `edit_models` | (picked from the files you have) | Only to choose the edit model files yourself: `{"unet": …, "clip": …, "vae": …, "lora": …}` |
 
 ## Please read: licenses and notes
