@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import helpers  # noqa: F401 — 저장소 폴더를 sys.path에 (이 파일만 돌려도 되게)
+
 from spritegen import comfy_launch as cl
 
 
@@ -31,8 +33,8 @@ class ComfyLaunchTest(unittest.TestCase):
         self.assertIsNone(cl.script_args(["python.exe", "server.py"]))
 
     def test_split_cmdline_keeps_quoted_paths(self):
-        args = cl.split_cmdline('"C:\Program Files\py thon.exe" -u main.py --port 8189')
-        self.assertEqual(args, ["C:\Program Files\py thon.exe", "-u", "main.py", "--port", "8189"])
+        args = cl.split_cmdline(r'"C:\Program Files\py thon.exe" -u main.py --port 8189')
+        self.assertEqual(args, [r"C:\Program Files\py thon.exe", "-u", "main.py", "--port", "8189"])
 
     def test_comfy_root_and_node(self):
         with tempfile.TemporaryDirectory() as td:

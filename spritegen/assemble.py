@@ -18,16 +18,20 @@ from .imaging import (bbox, bg_pattern, cutout_any, estimate_bg, frame_alpha, fi
                       thumbnails)
 
 
-def pick_loop(frames, alphas, n):
+def pick_loop(frames, alphas, n, prange=None):
+    """prange: (최소, 최대) 한 바퀴 길이 — 모든 방향이 같은 걸음 수를 쓰게 정해 둔 범위(common_cycle). 없으면 이 방향만 보고 찾는다."""
     th = thumbnails(frames, alphas)
-    period, start, seam, scores = find_cycle(th, 14, 60)
     doubled = False
-    # 망토·치마로 다리가 가려지면 한 걸음이 한 바퀴처럼 보인다. 두 배 간격(두 걸음)이 확실히 더 잘 맞으면
-    # 그쪽이 진짜 한 바퀴다 (그대로 두면 같은 발로만 걷는다).
-    near = [k for k in range(2 * period - 2, 2 * period + 3) if k in scores]
-    if near and min(scores[k] for k in near) < 0.95 * scores[period]:
-        period, start, seam, _ = find_cycle(th, 2 * period - 2, 2 * period + 2)
-        doubled = True
+    if prange:
+        period, start, seam, scores = find_cycle(th, *prange)
+    else:
+        period, start, seam, scores = find_cycle(th, 14, 60)
+        # 망토·치마로 다리가 가려지면 한 걸음이 한 바퀴처럼 보인다. 두 배 간격(두 걸음)이 확실히 더 잘 맞으면
+        # 그쪽이 진짜 한 바퀴다 (그대로 두면 같은 발로만 걷는다).
+        near = [k for k in range(2 * period - 2, 2 * period + 3) if k in scores]
+        if near and min(scores[k] for k in near) < 0.95 * scores[period]:
+            period, start, seam, _ = find_cycle(th, 2 * period - 2, 2 * period + 2)
+            doubled = True
     head_y = [bbox(alphas[i])[1] for i in range(start, start + period)]
     phase = int(np.argmax(head_y))
     n = min(n, period)
@@ -35,6 +39,55 @@ def pick_loop(frames, alphas, n):
     return picks, n * FPS / period, {"period_frames": period, "period_sec": round(period / FPS, 2),
                                      "loop_start": start, "phase_offset": phase, "seam_error": round(seam, 4),
                                      "half_step_fixed": doubled}
+
+
+def cycle_scores(frames_dir):
+    """한 방향 영상의 반복 점수 곡선 {간격: 프레임 t와 t+간격의 차이} (작을수록 그 간격으로 되풀이된다)."""
+    frames = load_frames(frames_dir)
+    alphas = [frame_alpha(f, estimate_bg(f)) for f in frames]
+    return find_cycle(thumbnails(frames, alphas), 8, 60)[3]
+
+
+def common_cycle(all_scores, lo=10, hi=40, good=1.8):
+    """모든 방향이 '한 바퀴(두 걸음)'를 반복하게 공통 한 바퀴 길이를 정한다 → (길이, {방향: 그 방향의 한 바퀴 길이 또는 None}).
+    방향마다 따로 고르면 이음새가 조금 더 매끄러운 쪽을 따라 어떤 방향은 한 바퀴, 어떤 방향은 두 바퀴를 골랐다
+    (2026-10-09 걷기: S 17·E 24·N 48프레임). 시트는 방향마다 같은 장수를 같은 속도로 틀어서, 게임에서 방향을 틀면
+    걸음이 두 배로 빨라졌다.
+    1) 방향마다 가장 잘 맞는 간격을 1·2·3으로 나눈 값 중, 그 근처에 잘 맞는 골(가장 좋은 것의 good배 이내)이 있는 것만
+       후보로 해서 모든 방향이 가장 비슷해지는 한 바퀴 길이 C를 고른다(같으면 큰 쪽 — 한 바퀴를 반으로 쪼개지 않게).
+    2) 방향마다 C에 가장 가까운 골(1.6배 안, 멀수록·덜 맞을수록 손해)을 쓴다. 없으면 그 방향은 예전처럼 따로 고른다.
+       영상 AI가 방향마다 걷는 빠르기가 달라서(위 예: S가 E보다 30% 빠름) 방향별 길이는 다르다.
+    3) 망토로 다리가 가려져 한 걸음이 한 바퀴처럼 보였으면, 대부분 방향에서 두 배 간격이 확실히(0.75배 미만) 더 잘 맞는다
+       → 두 배를 한 바퀴로. 걸음이 조금 고르지 않으면 두 바퀴가 원래 조금 더 잘 맞아서 기준을 엄하게 했다.
+    시험한 영상 5개(도트 걷기 640·480, 걷기 둘, 달리기)에서 모든 방향이 한 바퀴씩. 해 본 것: 잘 맞는 골만 고르면 '모두
+    두 바퀴'도 서로 맞아서 그쪽으로 쏠렸고(8장에 두 바퀴면 한 걸음 2장), 흐릿한 골(반 바퀴 자리)까지 인정하면 반 바퀴가 골라졌다."""
+    vs = {}
+    for d, sc in all_scores.items():
+        ps = sorted(sc)
+        best = min(sc.values())
+        vs[d] = [(p, sc[p] / best) for i, p in enumerate(ps[1:-1], 1)
+                 if sc[p] <= sc[ps[i - 1]] and sc[p] <= sc[ps[i + 1]]]
+    best = {d: min(sc, key=sc.get) for d, sc in all_scores.items()}
+
+    def fund_cost(d, c):                                  # 나눈 값 중 c에 가까운 것까지의 거리 (그 근처에 잘 맞는 골이 없으면 손해)
+        def cost(f):
+            has = any(0.8 * f <= p <= 1.25 * f and rel <= good for p, rel in vs[d])
+            return abs(np.log(f / c)) + (0 if has else 0.5)
+        return min(cost(best[d] / k) for k in (1, 2, 3) if best[d] / k >= 0.7 * lo)
+
+    def near(d, t):                                       # t 근처(1.6배 안) 골 중 가깝고 잘 맞는 것 (상대 점수, 간격)
+        cand = [(abs(np.log(p / t)) + 0.3 * (rel - 1), rel, p) for p, rel in vs[d]
+                if abs(np.log(p / t)) <= np.log(1.6) and rel <= 3]
+        return min(cand)[1:] if cand else (None, None)
+    costs = {c: sum(fund_cost(d, c) for d in best) for c in np.arange(lo, hi + 0.01, 0.5)}
+    floor = min(costs.values())
+    c = max(k for k, v in costs.items() if v <= floor + 0.01 * len(best))
+    picked = {d: near(d, c) for d in best}
+    doubled = {d: near(d, 2 * c) for d in best}
+    twice = [d for d in best if picked[d][0] and doubled[d][0] and doubled[d][0] < 0.75 * picked[d][0]]
+    if len(twice) > len(best) / 2:
+        c, picked = 2 * c, doubled
+    return float(c), {d: v[1] for d, v in picked.items()}
 
 
 def motion_signal(alphas):
@@ -98,7 +151,7 @@ def pick_oneshot(frames, alphas, n, window=None, hold_end=False):
 
 
 def analyze_direction(frames_dir, kind, n_frames, strip_effects=False, window=None, override=None, loop=None,
-                      hold_end=False, matte=None):
+                      hold_end=False, matte=None, prange=None):
     """override: {칸 번호: 영상 프레임 번호} — 사람이 '다른 장면으로 바꾸기'로 고른 프레임.
     loop: 기준 방향에서 고른 반복 구간 (picks, fps, rep) — 모든 방향이 같은 영상 박자를 따를 때 같은 프레임을 쓴다.
     matte: 빛 효과 방식(none·vivid·strip)을 주면 고른 프레임을 AI 배경 지우기(BEN v2)와 크로마키를 합쳐 딴다
@@ -119,7 +172,7 @@ def analyze_direction(frames_dir, kind, n_frames, strip_effects=False, window=No
         picks = [max(0, min(len(frames) - 1, p + lag)) for p in loop[0]]
         fps, rep = loop[1], dict(loop[2], shared_loop=True, lag_frames=lag)
     else:
-        picks, fps, rep = (pick_loop(frames, alphas, n_frames) if kind == "loop"
+        picks, fps, rep = (pick_loop(frames, alphas, n_frames, prange) if kind == "loop"
                            else pick_oneshot(frames, alphas, n_frames, window, hold_end))
     for k, fi in (override or {}).items():
         if 0 <= int(k) < len(picks):
@@ -400,8 +453,12 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
             al = [frame_alpha(f, estimate_bg(f)) for f in frames]
             shared = (*pick_loop(frames, al, n_frames), motion_signal(al))
     overrides = overrides or {}
+    cycle, ranges = None, {}
+    if kind == "loop" and shared is None and len(dir_folders) > 1:   # 방향마다 따로 만든 영상: 모두 한 바퀴씩
+        cycle, lengths = common_cycle({d: cycle_scores(f) for d, f in dir_folders.items()})
+        ranges = {d: (v - 1, v + 1) for d, v in lengths.items() if v}
     done = {d: analyze_direction(folder, kind, n_frames, strip_effects, window, overrides.get(d), shared, hold_end,
-                                 effects if matting else None)
+                                 effects if matting else None, ranges.get(d))
             for d, folder in dir_folders.items()}
     if matting:
         from . import matting as mt
@@ -465,6 +522,7 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
         write_gifs(prow, order, count, fps, out_dir, "px")
 
     report = {"kind": kind, "count": count, "order": order, "frames": n, "sprite_fps": round(fps, 2),
+              "common_cycle_frames": cycle,
               "cell_crop": [x0, y0, x1, y1], "char_px": round(char_px, 1) if char_px else None, "sources": sources,
               "directions": {d: r["report"] for d, r in done.items()}}
     try:                                             # 점검이 실패해도 시트는 그대로 쓴다
