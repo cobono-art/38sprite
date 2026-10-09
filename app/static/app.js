@@ -293,7 +293,8 @@ function renderSheet() {
       ? `이 그림은 ${t.angle}° · ${t.count}방향 · ${styleName(t.style)}로 그렸어요. 지금 설정으로 쓰려면 다시 그려 주세요.` : "")
       || facingText;
     stateEl.textContent = `${t.count}방향 · ${t.angle}° · ${styleName(t.style)}${sh.uploaded ? " · 직접 올림" : ""}` +
-      (sh.fixed ? ` · ${sh.fixed} 다시 그림` : "");
+      (sh.fixed ? ` · ${sh.fixed} 다시 그림` : "") +
+      (t.style === "pixel" && sh.pixel_cells ? ` · 도트 키 ${sh.pixel_cells}칸` : "");   /* 그림에서 잰 실제 칸 수 = 결과 키 */
     stateEl.className = "small " + (sh.problem || differs || facing.length ? "warn-text" : "ok-text");
     const sel = $("#redraw-dir"), prev = sel.value;
     sel.replaceChildren(...generatedFor(t.count, t.mirror !== false).map(d => new Option(`${ARROWS[d]} ${d}`, d)));
@@ -947,7 +948,7 @@ function buildPlayer(view, p, m) {
 
   $(".sv-title", frag).textContent = m.name;
   $(".sv-sub", frag).textContent = `${m.kind === "loop" ? "반복 동작" : "한 번 하는 동작"} · ${s.count}방향 · ` +
-    (hasPx ? `픽셀 ${s.pixel_height}px` : "HD");
+    (hasPx ? `픽셀 ${(m.result && m.result.pixel_height) || s.pixel_height}px` : "HD");
 
   const dpad = $(".dpad", frag), viewSeg = $(".sv-view", frag);
   const avail = new Set(dirsFor(s.count));

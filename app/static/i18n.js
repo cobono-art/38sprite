@@ -225,7 +225,7 @@ const EN_RULES = [
   [/^기본 동작 한 번에 만들기 \((\d+)개\)$/, "Make the basic motions at once ($1)"], [/^예상 (\d+)분$/, "about $1 min"],
   [/^생성 중 (\d+)\/(\d+)$/, "Generating $1/$2"], [/^영상 AI 생성 중: (\w+) \((\d+)\/(\d+)\)$/, "Video AI generating: $1 ($2/$3)"],
   [/^Codex가 ([NSEW]{1,2}) 방향만 다시 그리는 중이에요 \(보통 1~3분\)$/, "Codex is redrawing only $1 (usually 1–3 min)"],
-  [/^(\w+) 방향 원본$/, "$1 source"], [/^([NSEW]{1,2}) 방향만 보기$/, "Show $1 only"], [/^픽셀 (\d+)px$/, "Pixel $1px"],
+  [/^(\w+) 방향 원본$/, "$1 source"], [/^([NSEW]{1,2}) 방향만 보기$/, "Show $1 only"], [/^픽셀 (\d+)px$/, "Pixel $1px"], [/^도트 키 (\d+)칸$/, "pixel height $1 (measured)"],
   [/^(\d+)장$/, "$1"], [/^자동 점검: 확인할 곳 (\d+)개$/, "Auto check: $1 to review"],
   [/^(\S+) ([NSEW]{1,2}) 방향 (\d+)장$/, "$1 $2 · $3 frames"], [/^(\d+)번째 장 바꾸기$/, "Replace frame $1"],
   [/^(\S+) ([NSEW]{1,2}) (\d+)번째 장을 바꿀 장면을 고르세요$/, "Pick a moment to replace $1 $2 frame $3"],

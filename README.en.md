@@ -28,7 +28,7 @@ A real result (8-direction walk sheets):
 | Basic motion set | Idle, walk, run, attack, hit and death in one click. |
 | Loops · one-shots | Walks and dances are cut into seamless loops; attacks are trimmed to the action. Motions that end in a different pose (like death) are supported. |
 | Directions · camera | 8, 4 or 2 directions, from eye level to top-down (default: 45° high quarter view). |
-| HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. |
+| HD · pixel art | Every motion is exported as an HD sheet and a pixel-art sheet. In pixel style the pixel height is measured from the pixel grid Codex actually drew, so one sprite pixel matches one pixel of the art (asked for 64, Codex draws about 74). |
 | Light effects | None · vivid · strip (under "Advanced"). Picks "vivid" automatically when the description mentions magic, sword trails and so on. "Vivid" also writes a character-only and an effects-only layer sheet. |
 | Magenta from start to end | Every mode, including the 3D mannequin, generates on a magenta background so chroma keying stays clean. If the video AI changes the background color mid-clip, the direction is regenerated with a new seed (up to twice by default) and the cleanest result is kept. |
 | Light-trail removal (optional) | The video AI (H3) has no negative prompt, and writing "no trails" makes it draw them. A ComfyUI node made for 38Sprite (install with `setup_negative.bat`) removes light trails, sparkles and glows during generation for motions without effects, at the same speed. |
@@ -153,6 +153,7 @@ Defaults work out of the box. Copy `config.example.json` to `config.json` only i
 | `matting` | `auto` | AI matting: `auto` (use the model if present) or `off` |
 | `matting_dir` | `models/ben2` | Folder with the BEN v2 files (`BEN2.py`, `model.safetensors`) |
 | `turbo_r2v_steps` | `6` | Generation steps for 3D mannequin mode (4 is faster, but about 40% of seeds turn the background into blotches or rings and need a redo) |
+| `pixel_auto_height` | `true` | Use the pixel height measured from the direction sheet's pixel grid (`false` scales down to the height you chose) |
 | `turbo_steps` | `6` | Video generation steps for per-direction mode (8 = the old setting, about 25% slower; 4 leaves specks in the background) |
 | `negative_weight` | `1.5` | Strength of the light-trail removal node (0 = off). Used only when the node is installed and the motion's light effects are "none" or "strip" |
 | `negative_words` | (trails, sparkles, glows …) | What the node removes (English, comma-separated) |

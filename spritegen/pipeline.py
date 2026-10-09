@@ -19,7 +19,7 @@ from .assemble import assemble, retime
 from .directions import detect_cells, directions_for, facing_problems, first_frames, generated_directions
 from .effects import remove_effects
 from .imaging import (KEY_MAGENTA, cutout_any, cutout_rgba, bg_pattern, estimate_bg, frame_alpha, frames_to_webp, load_frames,
-                      load_ref, sheet_alpha)
+                      load_ref, pixel_cell_size, sheet_alpha)
 from .prompts import follow_prompt, mannequin_prompt, motion_prompt, redraw_prompt, reference_prompt, sheet_prompt
 from . import mannequin as mq
 
@@ -152,6 +152,39 @@ def check_sheet(rec, src):
         rec["problem"] = str(e)
         return
     rec["facing"] = facing_problems(src, generated_directions(s["count"], s["mirror"]))
+    rec["pixel_cells"] = sheet_pixel_cells(src, s)
+
+
+def sheet_pixel_cells(src, s):
+    """도트 스타일 방향 그림의 실제 도트 키(칸 수). 코덱스는 지시한 키와 다르게 그린다(64칸으로 지시 → 약 74칸).
+    도트 결과를 이 키로 만들면 결과 한 칸이 그림 한 칸과 맞아서, 64칸으로 줄일 때처럼 눈·허리띠·지팡이 구슬이 뭉개지지 않는다
+    (2026-10-09 같은 걷기 영상 비교). 도트가 아니거나 못 재면 None — 그때는 설정한 키를 쓴다."""
+    if s.get("style") != "pixel":
+        return None
+    gen = generated_directions(s["count"], s["mirror"])
+    try:
+        _, cells, masks = detect_cells(src, gen)
+    except ValueError:
+        return None
+    cell, _ = pixel_cell_size(src, [(cells[d], masks[d]) for d in gen])
+    if not cell:
+        return None
+    n = round(float(np.median([cells[d][3] - cells[d][1] for d in gen])) / cell)
+    want = s.get("pixel_height", 64)
+    return n if 0.5 * want <= n <= 2 * want else None
+
+
+def pixel_height_for(p, m, sheet_rgb):
+    """이 동작의 도트 키: 방향 그림에서 잰 칸 수(설정 pixel_auto_height, 기본 켬), 못 재면 설정한 키."""
+    s = m["settings"]
+    if s["style"] != "pixel":
+        return 0
+    if store.load_config().get("pixel_auto_height", True):
+        rec = next((x for x in p.get("sheets", []) if x["file"] == m.get("sheet", p["sheet"]["file"])), None)
+        cells = rec["pixel_cells"] if rec and "pixel_cells" in rec else sheet_pixel_cells(sheet_rgb, s)
+        if cells:
+            return cells
+    return s["pixel_height"]
 
 
 SHEET_CELL = {"NW": (0, 0), "N": (1, 0), "NE": (2, 0), "W": (0, 1), "E": (2, 1), "SW": (0, 2), "S": (1, 2), "SE": (2, 2)}
@@ -851,9 +884,10 @@ def assemble_motion(pid, mid, extra=None):
             span = (0, period)
     master = m.get("master") or pick_master(gen)
     refs = [load_ref(mdir / "first" / f"{d}.png") for d in gen] if s["style"] == "pixel" else None
+    pixel_h = pixel_height_for(p, m, sheet_rgb)
     report = assemble({d: mdir / "frames" / d for d in gen}, s["count"], FRAME_SIZE, meta["feet_y"], mdir / "out",
                       kind=m["kind"], n_frames=m.get("frames", 8),
-                      pixel_height=s["pixel_height"] if s["style"] == "pixel" else 0, palette_refs=refs,
+                      pixel_height=pixel_h, palette_refs=refs,
                       strip_effects=effects_of(m) == "strip",
                       window=window, window_from=master if oneshot and m.get("mode") == "master" else None,
                       char_px=char_h * FRAME_SIZE[1], overrides=m.get("frame_overrides"),
@@ -869,7 +903,8 @@ def assemble_motion(pid, mid, extra=None):
         mm = next(x for x in pr["motions"] if x["id"] == mid)
         mm["status"] = "done"
         res = dict(mm.get("result") or {})
-        res.update({"dir": f"motions/{mid}/out", "report": report, "finished": store.now(), "generated": gen})
+        res.update({"dir": f"motions/{mid}/out", "report": report, "finished": store.now(), "generated": gen,
+                    "pixel_height": pixel_h or None})
         res.update(extra or {})
         mm["result"] = res
     store.update(pid, upd)

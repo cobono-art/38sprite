@@ -161,6 +161,26 @@ class PipelineHelpersTest(unittest.TestCase):
         self.assertNotIn("magenta", prompts.tail(False, gray=True).split("character is lit")[0])
         m = prompts.mannequin_prompt(45, "S", "slash")
         self.assertIn("every single frame", m)                   # 마네킹 모드도 기본은 마젠타
+        for t in (prompts.sheet_prompt(["S", "E", "N"], 45, "pixel"), prompts.redraw_prompt("E", 45, "pixel")):
+            self.assertIn("magenta (#FF00FF) chroma-key background", t)   # 코덱스 방향 그림도 마젠타 (회색은 틈·테두리가 남음)
+            self.assertNotIn("gray", t)
+
+    def test_pixel_height_from_sheet(self):
+        """도트 결과 키는 방향 그림에서 잰 칸 수 (코덱스는 64칸 지시에도 약 74칸으로 그림), 못 쟀거나 끄면 설정값."""
+        from spritegen import project
+        p = {"sheet": {"file": "sheets/a.png"}, "sheets": [{"file": "sheets/a.png", "pixel_cells": 74},
+                                                           {"file": "sheets/b.png", "pixel_cells": None}]}
+        m = {"settings": {"style": "pixel", "pixel_height": 64}, "sheet": "sheets/a.png"}
+        saved = project.load_config
+        try:
+            project.load_config = lambda: {}
+            self.assertEqual(pl.pixel_height_for(p, m, None), 74)
+            self.assertEqual(pl.pixel_height_for(p, dict(m, sheet="sheets/b.png"), None), 64)
+            self.assertEqual(pl.pixel_height_for(p, dict(m, settings={"style": "hd", "pixel_height": 64}), None), 0)
+            project.load_config = lambda: {"pixel_auto_height": False}
+            self.assertEqual(pl.pixel_height_for(p, m, None), 64)
+        finally:
+            project.load_config = saved
 
     def test_video_prompts_name_no_unwanted_things(self):
         """H3에는 원하지 않는 것을 이름으로 적지 않는다 (적으면 그 낱말이 내용으로 읽혀 오히려 궤적·빛이 생겼다).

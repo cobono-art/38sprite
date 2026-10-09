@@ -7,7 +7,11 @@ ANGLE_PRESETS = [
     {"id": "high", "label": "높은 쿼터뷰 45°", "deg": 45},
     {"id": "top", "label": "탑다운 60°", "deg": 60},
 ]
-SHEET_BG = "#B8B8B8"
+# 방향 그림 배경: 마젠타 크로마키 (영상과 같은 색). 2026-10-09 시험: 연회색(#B8B8B8)은 지팡이 테두리에 회색 잔테두리가
+# 남고 팔·지팡이와 몸 사이 틈의 회색이 캐릭터로 남았는데(은색 갑옷처럼 회색 캐릭터는 더 헷갈림), 마젠타는 도트·HD 모두
+# 테두리·틈이 깨끗했고 캐릭터 색에 분홍 기도 묻지 않았다.
+SHEET_BG = "#FF00FF"
+SHEET_BG_TEXT = f"pure magenta ({SHEET_BG}) chroma-key background (the magenta is only the background; the character keeps its own colors)"
 
 
 def camera_text(deg):
@@ -43,7 +47,7 @@ def sheet_prompt(dirs, deg, style="hd", pixel_height=64, pose=None):
         "$imagegen Using the attached character image as the exact reference (same face, hair, outfit, colors and "
         f"proportions), create ONE character direction sheet for a 2D game sprite, drawn from {camera_text(deg)}. "
         "Use exactly the same camera angle and the same scale in every view.\n\n"
-        f"Arrange the views in a 3x3 grid on a completely flat, uniform light gray ({SHEET_BG}) background:\n"
+        f"Arrange the views in a 3x3 grid on a completely flat, uniform {SHEET_BG_TEXT}:\n"
         + "\n".join(rows) + "\n\n"
         f"Pose: {pose_text}. It must be one identical 3D pose seen from different directions: items held in the right "
         "hand stay in the right hand in every view (left side of the image in front views, right side in back views).\n"
@@ -78,7 +82,7 @@ def redraw_prompt(d, deg, style="hd", pixel_height=64):
             "views, bottom row = front views) and a turnaround. Draw ONE single full-body view of this exact same "
             f"character in {VIEW[d]}. Use {camera_text(deg)}, exactly like the sheet, and the same pose as the other views "
             "in the sheet (items held in the right hand stay in the right hand). Same face, hair, outfit, colors and "
-            f"proportions. Style: {style_text(style, pixel_height)}. Plain flat light gray ({SHEET_BG}) background, no "
+            f"proportions. Style: {style_text(style, pixel_height)}. Plain flat {SHEET_BG_TEXT}, no "
             "floor, no shadow, no text. Only generate the image with the image tool; do not try to save, copy, move or "
             "list any files.")
 

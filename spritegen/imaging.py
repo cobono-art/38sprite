@@ -365,6 +365,64 @@ def pixelate(rgba_frames, height, colors, cluster=4, outline=True, palette_ref=N
     return out, palette
 
 
+def pixel_cell_size(rgb, regions, lo=3.5, hi=12.0, min_score=1.7):
+    """도트풍 그림(코덱스가 그린 픽셀아트)의 도트 한 칸 크기(px) → (칸 크기, 점수). 도트가 아니면 칸 크기는 None.
+    regions: [(bbox, 캐릭터 마스크)] — 시트의 방향마다. 도트 경계에서는 색이 확 바뀌므로 캐릭터 안의 가로·세로 색 경계를
+    칸 크기 p로 접었을 때 한 곳에 몰리는 p를 고른다. 모든 방향의 점수를 더해 하나로 정한다(한 캐릭터에서 우연히 맞는 값에
+    끌리지 않게). 1/2칸·2배칸과 헷갈리지 않게 반 칸 자리에 경계가 있는지도 본다.
+    2026-10-09 코덱스 시트(1254px) 측정: 도트 그림은 5.02px에서 점수 1.8~2.1(키 64칸으로 지시했는데 실제 약 73칸),
+    HD 그림도 이미지를 키운 흔적으로 3px·5px 근처에 약한 무늬(점수 1.4~1.6)가 있어서 3.5px 아래는 보지 않고 1.7 미만은 도트가 아니라고 본다.
+    칸을 1px보다 잘게 나눠 봐야 코덱스 그림의 칸이 정확히 잡힌다(1px 폭으로 보면 5.02 대신 4.4~4.7). 대신 정수 칸을 흐리게
+    키운 그림은 잘못 잴 수 있다(드묾 — 코덱스 칸은 정수가 아니고, 직접 올린 정수배 도트는 흐리지 않다)."""
+    profiles = []
+    f = rgb.astype(np.float32)
+    for (x0, y0, x1, y1), m in regions:
+        c, mm = f[y0:y1, x0:x1], m[y0:y1, x0:x1]
+        profiles.append((np.abs(np.diff(c, axis=1)).sum(-1) * (mm[:, 1:] | mm[:, :-1])).sum(0))
+        profiles.append((np.abs(np.diff(c, axis=0)).sum(-1) * (mm[1:] | mm[:-1])).sum(1))
+    profiles = [(pr, np.arange(1, len(pr) + 1, dtype=np.float64)) for pr in profiles if pr.sum() > 0]
+    if not profiles:
+        return None, 0.0
+
+    def folds(p, bins=16):                           # 방향·축마다 접은 칸 안 위치별 경계 세기 (평균 1로)
+        out = []
+        for pr, pos in profiles:
+            idx = (np.floor((pos % p) / p * bins).astype(int)) % bins
+            mean = np.bincount(idx, weights=pr, minlength=bins) / np.maximum(np.bincount(idx, minlength=bins), 1)
+            out.append(mean / (pr.mean() + 1e-9))
+        return out
+
+    def score(p):
+        return float(np.mean([f.max() for f in folds(p)]))
+
+    def half_ratio(p):                               # 칸 가운데(반 칸 자리)의 경계 세기 ÷ 격자선 자리
+        h = np.sum(folds(p), axis=0)
+        b = int(h.argmax())
+        return h[(b + len(h) // 2) % len(h)] / (h[b] + 1e-9)
+
+    # 정수배로 키운 진짜 도트(직접 올린 시트 등): 경계가 정수 칸 자리에 거의 다 모인다. 잘게 나눈 접기는 정수 위치에서
+    # 엉뚱한 칸(7px 그림에서 4.67px 등)도 같은 점수를 줘서 먼저 따로 본다 — 그런 칸 중 가장 큰 것이 진짜 칸.
+    exact = []
+    for p in range(int(np.ceil(lo)), int(hi)):
+        got = sum(max(pr[(pos.astype(int) - o) % p == 0].sum() for o in range(p)) for pr, pos in profiles)
+        exact.append((got / sum(pr.sum() for pr, _ in profiles), p))
+    top = max(f for f, _ in exact)
+    if top >= 0.8:
+        best = float(max(p for f, p in exact if f >= 0.9 * top))
+        return best, round(score(best), 2)
+    ps = np.arange(lo, hi, 0.01)
+    scores = np.array([score(p) for p in ps])
+    best = float(ps[scores.argmax()])
+    s_best = float(scores.max())
+    # 접기는 진짜 칸의 1/2에서도 같은 자리에 몰리고, 경계가 드문 그림은 2배에서도 몰릴 수 있다 → 반 칸 자리를 본다:
+    # 지금 칸의 반 칸 자리에도 경계가 고르게 있으면 절반이 진짜 칸, 2배 칸의 반 칸 자리에 경계가 거의 없으면 2배가 진짜 칸.
+    while best / 2 >= lo and half_ratio(best) >= 0.6:
+        best /= 2
+    while best * 2 < hi and half_ratio(best * 2) < 0.5:
+        best *= 2
+    return (round(best, 3) if s_best >= min_score else None), round(s_best, 2)
+
+
 def save_sheet(frames_rgba, fps, pivot, direction, out_dir, name):
     h, w = frames_rgba[0].shape[:2]
     sheet = np.zeros((h, w * len(frames_rgba), 4), np.uint8)
