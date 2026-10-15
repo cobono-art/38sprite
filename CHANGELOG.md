@@ -3,6 +3,18 @@
 버전은 [깃허브 릴리스](https://github.com/cobono-art/38sprite/releases) 태그와 같습니다. 앱 화면 왼쪽 위에서 지금 버전을 볼 수 있어요.
 Versions match the [GitHub release](https://github.com/cobono-art/38sprite/releases) tags. The app shows its version at the top left.
 
+## v0.6.1 — 2026-10-15
+
+**시트 가장자리 / Sheet edges**
+- 시트로 줄일 때 캐릭터 가장자리 바깥에 거의 투명한 칸(알파 1~12)이 시트마다 5만 개 넘게 남고, 그 칸의 색이 흰색·엉뚱한
+  색으로 튀었습니다. 알파를 제대로 섞는 화면에선 안 보이지만, 투명도를 무시하는 화면(휴대폰 미리보기 등)이나 게임 엔진이
+  캐릭터를 줄여 그릴 때 흰 점선 테두리로 보였습니다. 줄인 뒤 이런 칸을 지웁니다(선명도는 그대로). 예전에 만든 동작은
+  '다시 조립'하면 고쳐집니다(영상을 다시 만들 필요 없음).
+- Shrinking frames into the sheet left 50k+ nearly transparent pixels (alpha 1–12) around the character, with stray white
+  colors. Invisible with proper alpha blending, they showed up as a white dotted outline in viewers that ignore alpha and when
+  game engines draw the sprite smaller. They are now removed after shrinking (same sharpness); re-assemble older motions to fix
+  them without regenerating video.
+
 ## v0.6.0 — 2026-10-09
 
 **처음 설치 / First install**
