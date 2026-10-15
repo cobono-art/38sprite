@@ -15,7 +15,7 @@ from .comfy import FPS
 from .directions import SHEET_ORDER, preview_layout, source_of
 from .effects import remove_effects
 from .imaging import (bbox, bg_pattern, cutout_any, estimate_bg, frame_alpha, find_cycle, keep_head, load_frames, pixelate, save_gif,
-                      thumbnails)
+                      shrink_rgba, thumbnails)
 
 
 def pick_loop(frames, alphas, n, prange=None):
@@ -493,8 +493,7 @@ def assemble(dir_folders, count, size, feet_y, out_dir, kind="loop", n_frames=8,
     pivot = (W / 2 - x0, feet_y - y0)
     s = hd_char / char_px if char_px else hd_height / (y1 - y0)
     def scaled(r):
-        return {d: [np.asarray(Image.fromarray(im).resize((round(im.shape[1] * s), round(im.shape[0] * s)), Image.LANCZOS))
-                    for im in r[d]] for d in order}
+        return {d: [shrink_rgba(im, s) for im in r[d]] for d in order}   # Lanczos + 가장자리 밖 거의 투명한 칸 지우기 (흰 점선 테두리)
     hd = scaled(rows)
     meta = write_sheet(hd, order, fps, (pivot[0] * s, pivot[1] * s), out_dir, "sheet_hd", loop,
                        game_info(done, order, kind, fps, s, hold_end, locomotion, ground_y, move_scale))

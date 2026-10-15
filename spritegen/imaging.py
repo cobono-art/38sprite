@@ -176,6 +176,19 @@ def sheet_alpha(crop, bg, hole_dist=5, min_hole=40, flat=2.5):
     return a
 
 
+def shrink_rgba(im, s, cut=12):
+    """RGBA 그림 줄이기 (시트): Lanczos로 선명하게 줄이되, 가장자리 바깥에 생기는 거의 투명한 칸(알파 1~cut)은 지운다.
+    Lanczos는 줄일 때 가장자리 밖에 아주 옅은 물결을 남기고, 그 칸의 색은 0에 가까운 알파로 나눠 되돌리다 흰색·엉뚱한
+    색으로 튄다. 알파를 제대로 섞는 화면에선 안 보이지만 투명도를 무시하는 화면(휴대폰 미리보기 등)과 게임 엔진이 그림을
+    줄여 그릴 때 흰 점선 테두리가 된다 (2026-10-15 달리기·걷기 시트: 알파 1~12 칸 5만6천 개 중 10%가 흰색 — 사용자
+    "흰색으로 자글자글"). Box로 줄이면 안 생기지만 조금 흐려서 Lanczos + 지우기로."""
+    w, h = max(1, round(im.shape[1] * s)), max(1, round(im.shape[0] * s))
+    x = np.asarray(Image.fromarray(im).resize((w, h), Image.LANCZOS)).copy()
+    if x.ndim == 3 and x.shape[2] == 4:
+        x[x[..., 3] <= cut] = 0
+    return x
+
+
 def thumbnails(frames, alphas, size=(48, 64)):
     out = []
     for f, a in zip(frames, alphas):
